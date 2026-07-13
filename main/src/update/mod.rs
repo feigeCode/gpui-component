@@ -5,6 +5,7 @@ use gpui_component::WindowExt;
 use one_core::gpui_tokio::Tokio;
 use rust_i18n::t;
 
+#[cfg(test)]
 use crate::setting_tab::AppSettings;
 use one_core::config::UpdateConfig;
 
@@ -56,6 +57,7 @@ enum UpdateSource {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UpdateCheckTrigger {
+    #[cfg(test)]
     Automatic,
     Manual,
 }
@@ -124,6 +126,7 @@ pub fn handle_update_command() -> bool {
     true
 }
 
+#[cfg(test)]
 pub fn schedule_update_check(window: &mut Window, cx: &mut App) {
     if !should_run_update_check(
         UpdateCheckTrigger::Automatic,
@@ -241,6 +244,7 @@ async fn fetch_dialog_info_from_source(
     }
 }
 
+#[cfg(test)]
 fn should_run_update_check(trigger: UpdateCheckTrigger, auto_update_enabled: bool) -> bool {
     matches!(trigger, UpdateCheckTrigger::Manual) || auto_update_enabled
 }
