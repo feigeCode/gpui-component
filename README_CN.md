@@ -1,7 +1,14 @@
 > [!IMPORTANT]
-> **本仓库已经归档，OnetCli 已停止维护。**
-> OnetCli 今后不再提供新功能、问题修复或新版本发布。项目后续开发已迁移至 **Navop**：
-> [官方网站](https://navop.dev) · [GitHub 仓库](https://github.com/feigeCode/navop)
+> ### 🚚 项目已迁移至 Navop
+>
+> **OnetCli 已停止更新，但本仓库暂不归档。**
+>
+> 仓库将继续保留历史代码和现有 Issues；OnetCli 后续不再提供新功能、问题修复或版本发布，相关问题将在新的 **Navop** 仓库中继续修复。
+>
+> 项目后续开发地址：
+>
+> - 官方网站：<https://navop.dev>
+> - GitHub 仓库：<https://github.com/feigeCode/navop>
 
 <div align="center">
   <p>

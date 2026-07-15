@@ -1,7 +1,23 @@
 > [!IMPORTANT]
-> **This repository has been archived and OnetCli is no longer maintained.**
-> OnetCli will not receive new features, bug fixes, or releases. Active development has moved to **Navop**:
-> [Official Website](https://navop.dev) · [GitHub Repository](https://github.com/feigeCode/navop)
+> ### 🚚 项目已迁移 / Project Migrated
+>
+> **中文**
+>
+> OnetCli 已停止更新，但本仓库暂不归档。仓库将继续保留历史代码和现有 Issues；OnetCli 后续不再提供新功能、问题修复或版本发布，相关问题将在新的 **Navop** 仓库中继续修复。
+>
+> 项目后续开发已迁移至 **Navop**：
+>
+> - 官方网站：<https://navop.dev>
+> - GitHub 仓库：<https://github.com/feigeCode/navop>
+>
+> **English**
+>
+> OnetCli is no longer updated, but this repository will remain open and is not archived for now. Historical code and existing Issues will remain available. OnetCli will receive no new features, bug fixes, or releases; related issues will continue to be fixed in the new **Navop** repository.
+>
+> Active development has moved to **Navop**:
+>
+> - Official website: <https://navop.dev>
+> - GitHub repository: <https://github.com/feigeCode/navop>
 
 <div align="center">
   <p>
