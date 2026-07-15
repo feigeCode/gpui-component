@@ -1,5 +1,7 @@
 <template>
     <main class="home-page">
+        <MigrationNotice />
+
         <section class="hero">
             <div class="hero-copy">
                 <p class="eyebrow">Pure Rust · GPUI · GPU Rendered · No WebView</p>
@@ -266,6 +268,7 @@
 <script setup>
 import { withBase } from "vitepress";
 import { onMounted, onUnmounted } from "vue";
+import MigrationNotice from "./migration-notice.vue";
 
 const heroImage = withBase("/screenshots/app.png");
 const databaseImage = withBase("/screenshots/database.png");

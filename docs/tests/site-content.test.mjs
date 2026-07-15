@@ -12,11 +12,17 @@ async function readText(path) {
 test("首页替换为 OnetCli 产品文案并指向 GitHub Releases", async () => {
   const home = await readText("index.vue");
   const homeEntry = await readText("index.md");
+  const migrationNotice = await readText("migration-notice.vue");
 
   assert.match(home, /OnetCli/);
   assert.match(home, /数据库/);
   assert.match(home, /SSH/);
   assert.match(home, /GitHub Releases/);
+  assert.match(home, /MigrationNotice/);
+  assert.match(migrationNotice, /OnetCli 已停止更新/);
+  assert.match(migrationNotice, /not archived for now/);
+  assert.match(migrationNotice, /https:\/\/navop\.dev/);
+  assert.match(migrationNotice, /https:\/\/github\.com\/feigeCode\/navop/);
   assert.doesNotMatch(homeEntry, /GPUI Component/);
 });
 
