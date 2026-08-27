@@ -11,6 +11,16 @@ use super::color::{
 };
 use super::{Colorize, SemanticThemeTokens, Theme, ThemeColor, ThemeMode, ThemeToken, ThemeTokens};
 
+trait BlendExt {
+    fn blend(self, other: Hsla) -> Hsla;
+}
+
+impl BlendExt for Hsla {
+    fn blend(self, other: Hsla) -> Hsla {
+        gpui::ColorExt::blend(&self, &other)
+    }
+}
+
 fn try_parse_theme_token(value: &str) -> anyhow::Result<ThemeToken> {
     Ok(ThemeToken::new(
         try_parse_theme_color(value)?,
@@ -166,8 +176,11 @@ pub struct SemanticTypographyConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct SemanticShadowConfig {
+    #[schemars(with = "Option<Vec<serde_json::Value>>")]
     pub sm: Option<Vec<BoxShadow>>,
+    #[schemars(with = "Option<Vec<serde_json::Value>>")]
     pub md: Option<Vec<BoxShadow>>,
+    #[schemars(with = "Option<Vec<serde_json::Value>>")]
     pub lg: Option<Vec<BoxShadow>>,
 }
 
@@ -1020,9 +1033,10 @@ impl ThemeColor {
 
         // Ensure opacity for list_active, table_active, selection.
         let clamp_alpha = |raw: Option<&str>, color: Hsla, background: Background, max: f32| {
-            let base = color.a;
+            let base = color.alpha;
             let target = base.min(max);
-            let color = color.alpha(target);
+            let mut color = color;
+            color.alpha = target;
             let background = raw
                 .and_then(|value| try_parse_background_clamped(value, max).ok())
                 .unwrap_or_else(|| {
@@ -1107,9 +1121,14 @@ impl Theme {
 
 #[cfg(test)]
 mod tests {
-    use gpui::{linear_color_stop, linear_gradient, px};
+    use gpui::{Hsla, linear_color_stop, linear_gradient, px};
 
     use crate::{Theme, ThemeConfig, ThemeMode, ThemeSet, try_parse_color};
+
+    fn with_alpha(mut color: Hsla, alpha: f32) -> Hsla {
+        color.alpha = alpha;
+        color
+    }
 
     #[test]
     fn test_semantic_theme_config_parses_and_roundtrips() {
@@ -1293,8 +1312,11 @@ mod tests {
 
         // Solid: representative color and rendered background both capped at 0.2.
         let blue = try_parse_color("#3b82f6").unwrap();
-        assert_eq!(theme.list_active, blue.alpha(0.2));
-        assert_eq!(theme.tokens.list_active.background, blue.alpha(0.2).into());
+        assert_eq!(theme.list_active, with_alpha(blue, 0.2));
+        assert_eq!(
+            theme.tokens.list_active.background,
+            with_alpha(blue, 0.2).into()
+        );
 
         // Gradient: the opaque `to` stop is clamped to 0.2, not left fully opaque.
         let faint = try_parse_color("#bfdbfe33").unwrap();
@@ -1302,8 +1324,8 @@ mod tests {
             theme.tokens.table_active.background,
             linear_gradient(
                 180.,
-                linear_color_stop(faint.alpha(faint.a.min(0.2)), 0.),
-                linear_color_stop(blue.alpha(0.2), 1.),
+                linear_color_stop(with_alpha(faint, faint.alpha.min(0.2)), 0.),
+                linear_color_stop(with_alpha(blue, 0.2), 1.),
             )
         );
 
@@ -1314,8 +1336,8 @@ mod tests {
             theme.tokens.selection.background,
             linear_gradient(
                 180.,
-                linear_color_stop(clear.alpha(clear.a.min(0.3)), 0.),
-                linear_color_stop(blue.alpha(0.3), 1.),
+                linear_color_stop(with_alpha(clear, clear.alpha.min(0.3)), 0.),
+                linear_color_stop(with_alpha(blue, 0.3), 1.),
             )
         );
     }

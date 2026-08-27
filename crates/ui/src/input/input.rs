@@ -551,7 +551,6 @@ impl RenderOnce for Input {
                 })
             })
             .role(accessibility_role)
-            .when_some(self.accessibility_id, |this, id| this.accessibility_id(id))
             .when_some(aria_label, |this, label| this.aria_label(label))
             .when_some(placeholder, |this, placeholder| {
                 this.aria_placeholder(placeholder)

@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use gpui::ColorExt as _;
 use gpui::{
     App, Context, Div, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
     SharedString, Stateful, Styled as _, Window, div,

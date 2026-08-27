@@ -32,7 +32,7 @@ impl From<Pixels> for ButtonRounded {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct ButtonCustomVariant {
     color: Hsla,
     foreground: Hsla,
@@ -138,7 +138,7 @@ impl ButtonCustomVariant {
 }
 
 /// The variant of the Button.
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum ButtonVariant {
     #[default]
     Default,
@@ -312,8 +312,11 @@ impl Button {
     }
 
     /// Set the developer-assigned identifier exposed to accessibility clients.
-    pub fn accessibility_id(mut self, id: impl Into<SharedString>) -> Self {
-        self.base = self.base.accessibility_id(id);
+    pub fn accessibility_id(self, id: impl Into<SharedString>) -> Self {
+        // GPUI-CE no longer exposes an accessibility-id setter on elements.
+        // Keep this builder source-compatible while retaining the visible and
+        // announced label configured by the other accessibility builders.
+        let _ = id.into();
         self
     }
 

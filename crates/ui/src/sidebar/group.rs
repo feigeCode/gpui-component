@@ -1,4 +1,5 @@
 use crate::{ActiveTheme, Collapsible, h_flex, sidebar::SidebarItem, v_flex};
+use gpui::ColorExt as _;
 use gpui::{
     App, ElementId, IntoElement, ParentElement, SharedString, Styled as _, Window, div,
     prelude::FluentBuilder as _,

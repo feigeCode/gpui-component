@@ -4,8 +4,8 @@
 //! Note: diagnostics.rs is available in WASM, only syntax highlighting requires stubs.
 
 use gpui::{HighlightStyle, SharedString};
-use std::ops::Range;
 use std::time::Duration;
+use std::{borrow::Cow, ops::Range};
 
 // Syntax highlighter stub
 pub struct SyntaxHighlighter;
@@ -105,7 +105,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FontStyle {
     Normal,
@@ -127,7 +127,7 @@ pub enum FontWeightContent {
     Black = 900,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ThemeStyle {
     pub color: Option<gpui::Hsla>,
     pub font_style: Option<FontStyle>,
@@ -159,7 +159,7 @@ impl From<ThemeStyle> for HighlightStyle {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SyntaxColors {
     pub attribute: Option<ThemeStyle>,
     pub boolean: Option<ThemeStyle>,
@@ -398,7 +398,7 @@ impl StatusColors {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HighlightThemeStyle {
     pub editor_background: Option<gpui::Hsla>,
     pub editor_foreground: Option<gpui::Hsla>,
@@ -414,12 +414,32 @@ pub struct HighlightThemeStyle {
     pub syntax: SyntaxColors,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+impl JsonSchema for HighlightThemeStyle {
+    fn schema_name() -> Cow<'static, str> {
+        "HighlightThemeStyle".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "object" })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HighlightTheme {
     pub name: String,
     #[serde(default)]
     pub appearance: crate::ThemeMode,
     pub style: HighlightThemeStyle,
+}
+
+impl JsonSchema for HighlightTheme {
+    fn schema_name() -> Cow<'static, str> {
+        "HighlightTheme".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "object" })
+    }
 }
 
 impl std::ops::Deref for HighlightTheme {

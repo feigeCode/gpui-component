@@ -1,7 +1,7 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, ElementId, Hsla, IntoElement, Pixels, Point, Styled, point,
+    Animation, AnimationExt, ElementId, Hsla, IntoElement, Pixels, Point, Styled, hsla, point,
     prelude::FluentBuilder, px,
 };
 use smallvec::SmallVec;
@@ -121,12 +121,13 @@ impl Lerp for Hsla {
     /// near-grayscale UI colors (e.g. text colors), where hue interpolation is
     /// irrelevant.
     fn lerp(&self, target: &Self, t: f32) -> Self {
-        Hsla {
-            h: self.h.lerp(&target.h, t),
-            s: self.s.lerp(&target.s, t),
-            l: self.l.lerp(&target.l, t),
-            a: self.a.lerp(&target.a, t),
-        }
+        hsla(
+            (self.color.hue.into_degrees() / 360.)
+                .lerp(&(target.color.hue.into_degrees() / 360.), t),
+            self.color.saturation.lerp(&target.color.saturation, t),
+            self.color.lightness.lerp(&target.color.lightness, t),
+            self.alpha.lerp(&target.alpha, t),
+        )
     }
 }
 

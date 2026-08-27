@@ -18,22 +18,39 @@ pub struct SemanticThemeTokens {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ColorTokens {
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub background: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub surface: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub surface_foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub primary: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub primary_foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub secondary: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub secondary_foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub muted: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub muted_foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub accent: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub accent_foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub destructive: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub destructive_foreground: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub border: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub input: Hsla,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub ring: Hsla,
 }
 
@@ -121,8 +138,11 @@ impl Default for TypographyTokens {
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ShadowTokens {
+    #[schemars(with = "Vec<serde_json::Value>")]
     pub sm: Vec<BoxShadow>,
+    #[schemars(with = "Vec<serde_json::Value>")]
     pub md: Vec<BoxShadow>,
+    #[schemars(with = "Vec<serde_json::Value>")]
     pub lg: Vec<BoxShadow>,
 }
 

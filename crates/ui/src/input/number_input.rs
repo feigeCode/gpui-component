@@ -1,4 +1,5 @@
 use crate::theme::ActiveTheme;
+use gpui::ColorExt as _;
 use gpui::{
     AnyElement, App, Entity, FocusHandle, Focusable, InteractiveElement as _,
     StatefulInteractiveElement as _, Window, div, px,

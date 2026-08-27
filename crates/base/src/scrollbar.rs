@@ -8,11 +8,11 @@ use crate::{
     theme::ActiveTheme as _,
 };
 use gpui::{
-    Anchor, App, Axis, Background, BorderStyle, Bounds, ContentMask, CursorStyle, Edges, Element,
-    ElementId, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement,
-    IsZero, LayoutId, ListState, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels,
-    Point, Position, ScrollHandle, ScrollWheelEvent, Size, Style, UniformListScrollHandle, Window,
-    fill, point, prelude::FluentBuilder, px, relative, size,
+    Anchor, App, Axis, Background, BorderStyle, Bounds, ColorExt as _, ContentMask, CursorStyle,
+    Edges, Element, ElementId, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId,
+    IntoElement, IsZero, LayoutId, ListState, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    PaintQuad, Pixels, Point, Position, ScrollHandle, ScrollWheelEvent, Size, Style,
+    UniformListScrollHandle, Window, fill, point, prelude::FluentBuilder, px, relative, size,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -977,7 +977,9 @@ impl Scrollbar {
     /// explicit `ScrollbarStyles` still wins: this is the bottom of the
     /// cascade, not a new top of it.
     fn thumb_default_background(cx: &App, alpha: f32) -> Background {
-        cx.theme().tokens.colors.foreground.alpha(alpha).into()
+        let mut color = cx.theme().tokens.colors.foreground;
+        color.alpha = alpha.clamp(0., 1.);
+        color.into()
     }
 
     fn thumb_defaults(

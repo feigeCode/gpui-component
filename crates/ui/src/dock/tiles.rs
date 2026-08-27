@@ -6,6 +6,7 @@
 
 use std::rc::Rc;
 
+use gpui::ColorExt as _;
 use gpui::{
     AnyElement, App, AppContext as _, Context, Div, DragMoveEvent, Empty, InteractiveElement as _,
     IntoElement, MouseButton, MouseDownEvent, ParentElement as _, Pixels, Render, ScrollHandle,

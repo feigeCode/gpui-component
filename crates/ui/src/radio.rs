@@ -5,6 +5,7 @@ use crate::{
     ActiveTheme, AxisExt, Sizable, Size, StyledExt, checkbox::checkbox_check_icon, h_flex,
     text::Text, tooltip::ComponentTooltip, v_flex,
 };
+use gpui::ColorExt as _;
 use gpui::{
     AnyElement, App, Axis, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,

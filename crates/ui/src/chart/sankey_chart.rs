@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use gpui::ColorExt as _;
 use gpui::{
     App, Bounds, Corners, Hsla, Pixels, SharedString, TextAlign, Window, fill, linear_color_stop,
     linear_gradient, point, px,

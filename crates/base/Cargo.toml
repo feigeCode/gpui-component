@@ -25,6 +25,7 @@ gpui.workspace = true
 gpui_macros.workspace = true
 instant.workspace = true
 lsp-types.workspace = true
+palette.workspace = true
 ropey.workspace = true
 regex = "1"
 schemars.workspace = true

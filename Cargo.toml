@@ -43,10 +43,10 @@ gpui-fps = { path = "crates/fps", version = "0.1.0" }
 gpui-shell = { path = "crates/shell", version = "0.1.0" }
 story = { path = "crates/story" }
 
-gpui = { version = "0.2.2", git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
-gpui_web = { git = "https://github.com/zed-industries/zed" }
-gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
+gpui = { path = "../crates/gpui" }
+gpui_platform = { path = "../crates/gpui_platform", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui_web = { path = "../crates/gpui_web" }
+gpui_macros = { path = "../crates/gpui_macros" }
 reqwest_client = { git = "https://github.com/zed-industries/zed" }
 sum-tree = { version = "0.2.0", package = "zed-sum-tree" }
 # reqwest = { version = "0.12.15-zed", package = "zed-reqwest" }
@@ -63,6 +63,7 @@ reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "c15662
 anyhow = "1"
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = "0.4"
+palette = "0.7.6"
 lsp-types = { version = "0.97.0", features = ["proposed"] }
 notify = "7.0.0"
 raw-window-handle = "0.6.2"

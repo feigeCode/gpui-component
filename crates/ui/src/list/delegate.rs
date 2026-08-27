@@ -1,3 +1,4 @@
+use gpui::ColorExt as _;
 use gpui::{AnyElement, App, Context, IntoElement, ParentElement as _, Styled as _, Task, Window};
 
 use crate::{

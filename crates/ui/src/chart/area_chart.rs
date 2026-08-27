@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use gpui::ColorExt as _;
 use gpui::{
     AnyElement, App, Background, Bounds, ElementId, Hsla, IntoElement, Pixels, Point, SharedString,
     Window, point, px,

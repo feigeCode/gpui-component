@@ -1,5 +1,6 @@
 use crate::{ActiveTheme, Sizable, Size, StyledExt};
 use gpui::Bounds;
+use gpui::ColorExt as _;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     Animation, AnimationExt as _, AnyElement, App, ElementId, Hsla, IntoElement, ParentElement,

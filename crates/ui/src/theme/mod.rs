@@ -122,6 +122,7 @@ pub struct Theme {
     /// which costs no space and cannot be clipped.
     #[serde(default = "default_true")]
     pub focus_ring: bool,
+    #[schemars(schema_with = "gpui::hsla_schemar")]
     pub transparent: Hsla,
     /// Show the scrollbar mode, default: Scrolling
     #[serde(alias = "scrollbar_show")]
@@ -413,7 +414,11 @@ impl Theme {
 
     pub fn shadow_tokens(&self) -> ShadowTokens {
         if self.shadow {
-            ShadowTokens::elevations(self.transparent.alpha(0.18))
+            ShadowTokens::elevations({
+                let mut color = self.transparent;
+                color.alpha = 0.18;
+                color
+            })
         } else {
             ShadowTokens::default()
         }
@@ -493,10 +498,15 @@ mod semantic_token_tests {
 
     use super::{RADIUS_FULL, Theme};
 
+    fn with_alpha(mut color: Hsla, alpha: f32) -> Hsla {
+        color.alpha = alpha;
+        color
+    }
+
     #[test]
     fn semantic_colors_are_a_live_projection_of_legacy_fields() {
         let mut theme = Theme::default();
-        let primary = Hsla::default().alpha(0.42);
+        let primary = with_alpha(Hsla::default(), 0.42);
         theme.primary = primary;
 
         assert_eq!(theme.color_tokens().primary, primary);
@@ -508,8 +518,8 @@ mod semantic_token_tests {
         let mut theme = Theme::default();
         let component_color = theme.button_primary;
         let mut tokens = theme.semantic_tokens();
-        tokens.colors.primary = Hsla::default().alpha(0.25);
-        tokens.colors.destructive = Hsla::default().alpha(0.75);
+        tokens.colors.primary = with_alpha(Hsla::default(), 0.25);
+        tokens.colors.destructive = with_alpha(Hsla::default(), 0.75);
         tokens.radius.md = px(10.);
 
         theme.apply_semantic_tokens(&tokens);
@@ -560,7 +570,7 @@ impl From<&ThemeColor> for Theme {
     fn from(colors: &ThemeColor) -> Self {
         Theme {
             mode: ThemeMode::default(),
-            transparent: Hsla::transparent_black(),
+            transparent: gpui::transparent_black(),
             font_family: ".SystemUIFont".into(),
             font_size: px(16.),
             mono_font_family: if cfg!(target_os = "macos") {

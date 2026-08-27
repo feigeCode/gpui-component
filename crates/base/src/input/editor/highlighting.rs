@@ -99,7 +99,7 @@ impl InputEditorStyle {
     /// installed when the state was built.
     pub fn resolved(&self, tokens: &SemanticThemeTokens) -> Self {
         let colors = &tokens.colors;
-        let unset = |value: Hsla| value.a == 0.;
+        let unset = |value: Hsla| value.alpha == 0.;
         let or = |value: Hsla, fallback: Hsla| if unset(value) { fallback } else { value };
 
         let foreground = or(self.foreground, colors.foreground);
@@ -107,7 +107,7 @@ impl InputEditorStyle {
         if unset(selection) {
             selection = colors.accent;
             // A selection must not hide the glyphs it selects.
-            selection.a = 0.4;
+            selection.alpha = 0.4;
         }
 
         Self {

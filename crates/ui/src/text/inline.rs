@@ -98,7 +98,11 @@ impl Inline {
     fn paint_selected_bounds(&self, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut App) {
         window.paint_quad(gpui::PaintQuad {
             bounds,
-            background: cx.theme().blue.alpha(0.01).into(),
+            background: {
+                let mut color = cx.theme().blue;
+                color.alpha = 0.01;
+                color.into()
+            },
             corner_radii: Corners::default(),
             border_color: gpui::transparent_black(),
             border_style: BorderStyle::default(),

@@ -722,18 +722,22 @@ fn clip_stops_to_bar(stops: [LinearColorStop; 2]) -> [LinearColorStop; 2] {
     let [a, b] = stops;
     let p0 = a.percentage;
     let p1 = b.percentage;
+    let a_color: Hsla = a.color.into();
+    let b_color: Hsla = b.color.into();
     let lerp = |t: f32| -> Hsla {
-        Hsla {
-            h: a.color.h + (b.color.h - a.color.h) * t,
-            s: a.color.s + (b.color.s - a.color.s) * t,
-            l: a.color.l + (b.color.l - a.color.l) * t,
-            a: a.color.a + (b.color.a - a.color.a) * t,
-        }
+        gpui::hsla(
+            (a_color.color.hue.into_degrees()
+                + (b_color.color.hue.into_degrees() - a_color.color.hue.into_degrees()) * t)
+                / 360.,
+            a_color.color.saturation + (b_color.color.saturation - a_color.color.saturation) * t,
+            a_color.color.lightness + (b_color.color.lightness - a_color.color.lightness) * t,
+            a_color.alpha + (b_color.alpha - a_color.alpha) * t,
+        )
     };
     let span = p1 - p0;
     let sample = |target: f32| -> Hsla {
         if span.abs() < f32::EPSILON {
-            a.color
+            a_color
         } else {
             lerp((target - p0) / span)
         }
@@ -742,7 +746,7 @@ fn clip_stops_to_bar(stops: [LinearColorStop; 2]) -> [LinearColorStop; 2] {
         a
     } else {
         LinearColorStop {
-            color: sample(p0.clamp(0., 1.)),
+            color: sample(p0.clamp(0., 1.)).into(),
             percentage: p0.clamp(0., 1.),
         }
     };
@@ -750,7 +754,7 @@ fn clip_stops_to_bar(stops: [LinearColorStop; 2]) -> [LinearColorStop; 2] {
         b
     } else {
         LinearColorStop {
-            color: sample(p1.clamp(0., 1.)),
+            color: sample(p1.clamp(0., 1.)).into(),
             percentage: p1.clamp(0., 1.),
         }
     };

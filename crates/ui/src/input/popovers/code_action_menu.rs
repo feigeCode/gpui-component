@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use gpui::ColorExt as _;
 use gpui::{
     Action, AnyElement, App, AppContext, Context, DismissEvent, Empty, Entity, EventEmitter,
     Half as _, InteractiveElement as _, IntoElement, ParentElement, Pixels, Point, Render,

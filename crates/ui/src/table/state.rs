@@ -11,6 +11,7 @@ use crate::{
     scroll::{ScrollableMask, Scrollbar},
     v_flex,
 };
+use gpui::ColorExt as _;
 use gpui::{
     AppContext, Axis, Bounds, ClickEvent, Context, Div, DragMoveEvent, EventEmitter, FocusHandle,
     Focusable, InteractiveElement, IntoElement, ListSizingBehavior, MouseButton, MouseDownEvent,

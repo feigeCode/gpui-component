@@ -8,6 +8,7 @@ use gpui::{
     StatefulInteractiveElement, StyleRefinement, Styled, Subscription, Toggled, Window, div, hsla,
     prelude::FluentBuilder as _,
 };
+use palette::IntoColor as _;
 use smallvec::SmallVec;
 
 use crate::{
@@ -55,34 +56,34 @@ fn parse_hex(value: &str) -> Option<Hsla> {
     };
 
     Some(
-        Rgba {
-            r: component(0)?,
-            g: component(1)?,
-            b: component(2)?,
-            a: if has_alpha { component(3)? } else { 1.0 },
-        }
-        .into(),
+        Rgba::new(
+            component(0)?,
+            component(1)?,
+            component(2)?,
+            if has_alpha { component(3)? } else { 1.0 },
+        )
+        .into_color(),
     )
 }
 
 /// Formats a color as `#RRGGBB`, or `#RRGGBBAA` when it is translucent.
 fn hex_string(color: Hsla) -> String {
-    let rgba = Rgba::from(color);
+    let rgba: Rgba = color.into_color();
     let channel = |value: f32| (value * 255.) as u32;
-    if rgba.a < 1. {
+    if rgba.alpha < 1. {
         format!(
             "#{:02X}{:02X}{:02X}{:02X}",
-            channel(rgba.r),
-            channel(rgba.g),
-            channel(rgba.b),
-            channel(rgba.a)
+            channel(rgba.color.red),
+            channel(rgba.color.green),
+            channel(rgba.color.blue),
+            channel(rgba.alpha)
         )
     } else {
         format!(
             "#{:02X}{:02X}{:02X}",
-            channel(rgba.r),
-            channel(rgba.g),
-            channel(rgba.b)
+            channel(rgba.color.red),
+            channel(rgba.color.green),
+            channel(rgba.color.blue)
         )
     }
 }
@@ -157,10 +158,10 @@ impl HslaSliders {
 
     fn write(&self, color: Hsla, window: &mut Window, cx: &mut App) {
         let components = [
-            (&self.hue, color.h),
-            (&self.saturation, color.s),
-            (&self.lightness, color.l),
-            (&self.alpha, color.a),
+            (&self.hue, color.color.hue.into_degrees() / 360.),
+            (&self.saturation, color.color.saturation),
+            (&self.lightness, color.color.lightness),
+            (&self.alpha, color.alpha),
         ];
         for (slider, value) in components {
             slider.update(cx, |slider, cx| slider.set_value(value, window, cx));

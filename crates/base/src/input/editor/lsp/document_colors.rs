@@ -2,6 +2,7 @@ use anyhow::Result;
 use gpui::{App, Context, Hsla, Task, Window};
 use instant::Duration;
 use lsp_types::ColorInformation;
+use palette::IntoColor as _;
 use ropey::Rope;
 use std::ops::Range;
 
@@ -34,13 +35,13 @@ fn document_colors_from_response(
     let mut document_colors = colors
         .iter()
         .map(|info| {
-            let color = gpui::Rgba {
-                r: info.color.red,
-                g: info.color.green,
-                b: info.color.blue,
-                a: info.color.alpha,
-            }
-            .into();
+            let color = gpui::Rgba::new(
+                info.color.red,
+                info.color.green,
+                info.color.blue,
+                info.color.alpha,
+            )
+            .into_color();
 
             (info.range, color)
         })

@@ -10,6 +10,7 @@ use gpui::{
     WindowControlArea, WindowOptions, div, linear_color_stop, linear_gradient,
     prelude::FluentBuilder as _, px,
 };
+use palette::IntoColor as _;
 use smallvec::SmallVec;
 
 pub const TITLE_BAR_HEIGHT: Pixels = px(34.);
@@ -19,14 +20,15 @@ const TITLE_BAR_LEFT_PADDING: Pixels = px(80.);
 const TITLE_BAR_LEFT_PADDING: Pixels = px(12.);
 
 fn default_title_bar_background(title_bar: Hsla, background: Hsla) -> Background {
-    let title_bar_rgb = title_bar.to_rgb();
-    let background_rgb = background.to_rgb();
-    let mixed = Hsla::from(Rgba {
-        r: title_bar_rgb.r * 0.55 + background_rgb.r * 0.45,
-        g: title_bar_rgb.g * 0.55 + background_rgb.g * 0.45,
-        b: title_bar_rgb.b * 0.55 + background_rgb.b * 0.45,
-        a: title_bar_rgb.a * 0.55 + background_rgb.a * 0.45,
-    });
+    let title_bar_rgb: Rgba = title_bar.into_color();
+    let background_rgb: Rgba = background.into_color();
+    let mixed: Hsla = Rgba::new(
+        title_bar_rgb.color.red * 0.55 + background_rgb.color.red * 0.45,
+        title_bar_rgb.color.green * 0.55 + background_rgb.color.green * 0.45,
+        title_bar_rgb.color.blue * 0.55 + background_rgb.color.blue * 0.45,
+        title_bar_rgb.alpha * 0.55 + background_rgb.alpha * 0.45,
+    )
+    .into_color();
 
     linear_gradient(
         180.,
@@ -410,22 +412,14 @@ mod tests {
 
     #[test]
     fn test_default_title_bar_background() {
-        let title_bar = Hsla::black();
-        let background = Hsla::white();
+        let title_bar = gpui::black();
+        let background = gpui::white();
 
         assert_eq!(
             default_title_bar_background(title_bar, background),
             linear_gradient(
                 180.,
-                linear_color_stop(
-                    Hsla::from(Rgba {
-                        r: 0.45,
-                        g: 0.45,
-                        b: 0.45,
-                        a: 1.,
-                    }),
-                    0.,
-                ),
+                linear_color_stop(Rgba::new(0.45, 0.45, 0.45, 1.).into_color(), 0.,),
                 linear_color_stop(title_bar, 1.),
             )
         );

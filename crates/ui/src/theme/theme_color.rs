@@ -1,16 +1,26 @@
-use std::{ops::Deref, sync::Arc};
+use std::{borrow::Cow, ops::Deref, sync::Arc};
 
 use crate::{ThemeMode, theme::DEFAULT_THEME_COLORS};
 
-use gpui::{Background, Fill, Hsla};
-use schemars::JsonSchema;
+use gpui::{Background, Hsla};
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
 /// A theme token that keeps a solid representative color and its renderable background.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ThemeToken {
     pub color: Hsla,
     pub background: Background,
+}
+
+impl JsonSchema for ThemeToken {
+    fn schema_name() -> Cow<'static, str> {
+        "ThemeToken".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({ "type": "object" })
+    }
 }
 
 impl ThemeToken {
@@ -48,14 +58,8 @@ impl From<ThemeToken> for Background {
     }
 }
 
-impl From<ThemeToken> for Fill {
-    fn from(token: ThemeToken) -> Self {
-        Fill::Color(token.background)
-    }
-}
-
 /// Theme colors used throughout the UI components.
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
 pub struct ThemeColor {
     /// Used for accents such as hover background on MenuItem, ListItem, etc.
     pub accent: Hsla,
@@ -340,6 +344,16 @@ pub struct ThemeColor {
     pub cyan: Hsla,
     /// The base cyan light color.
     pub cyan_light: Hsla,
+}
+
+impl JsonSchema for ThemeColor {
+    fn schema_name() -> Cow<'static, str> {
+        "ThemeColor".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({ "type": "object" })
+    }
 }
 
 macro_rules! define_theme_tokens {

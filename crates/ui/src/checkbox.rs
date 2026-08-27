@@ -5,6 +5,7 @@ use crate::{
     text::Text, tooltip::ComponentTooltip, v_flex,
 };
 use crate::{StyledExt as _, ThemeStyled as _};
+use gpui::ColorExt as _;
 use gpui::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,

@@ -4,7 +4,7 @@ use std::{rc::Rc, time::Duration};
 #[cfg(target_family = "wasm")]
 use web_time::Instant;
 
-use gpui::{App, ElementId, SharedString, SpringConfig, SpringState, SpringTarget, Window};
+use gpui::{App, ElementId, Pixels, SharedString, Window};
 
 use crate::animation::{Lerp, ease_out_cubic};
 
@@ -239,8 +239,8 @@ impl Spring {
     /// and nothing to collide with. A height, an opacity, or anything bounded by
     /// the geometry around it should stay at the default.
     ///
-    /// This is $\zeta$, not GPUI's `SpringConfig::damping`, which is the
-    /// coefficient $c = 2 \zeta \omega_0$.
+    /// This is $\zeta$. Internally it is converted to the damping coefficient
+    /// $c = 2 \zeta \omega_0$ used by the integrator.
     pub const fn with_damping(mut self, ratio: f32) -> Self {
         self.damping = ratio;
         self
@@ -274,23 +274,70 @@ impl Spring {
         self
     }
 
-    /// The physical parameters GPUI integrates. The response must be non-zero;
-    /// [`spring`] adopts the target before reaching here when it is not.
-    ///
-    /// Derived on use rather than stored, so the builders stay `const`: neither
-    /// `Duration::as_secs_f32` nor the square root that recovers a damping ratio
-    /// from a built config can be called from a `const fn`.
-    fn config(&self) -> SpringConfig {
+    /// The physical parameters used by the local spring integrator. The
+    /// response must be non-zero; [`spring`] adopts the target before reaching
+    /// here when it is not.
+    fn config(&self) -> (f32, f32) {
         let frequency = std::f32::consts::TAU / self.response.as_secs_f32();
-        SpringConfig::new(frequency * frequency, 2.0 * self.damping * frequency, 1.0)
+        (frequency * frequency, 2.0 * self.damping * frequency)
+    }
+}
+
+/// A scalar value that can be animated by [`spring`].
+///
+/// GPUI-CE no longer exposes its former `SpringTarget` abstraction. Component
+/// motion only animates logical scalars and CSS pixels, so it keeps that small
+/// conversion boundary locally instead of depending on GPUI internals.
+pub trait SpringValue: Copy {
+    fn to_spring_value(self) -> f32;
+    fn from_spring_value(value: f32) -> Self;
+}
+
+impl SpringValue for f32 {
+    fn to_spring_value(self) -> f32 {
+        self
+    }
+
+    fn from_spring_value(value: f32) -> Self {
+        value
+    }
+}
+
+impl SpringValue for Pixels {
+    fn to_spring_value(self) -> f32 {
+        self.into()
+    }
+
+    fn from_spring_value(value: f32) -> Self {
+        value.into()
     }
 }
 
 #[derive(Clone, Copy)]
 struct SpringTransition {
-    state: SpringState,
+    position: f32,
+    velocity: f32,
     target: f32,
     updated_at: Instant,
+}
+
+fn step_spring(
+    mut state: SpringTransition,
+    target: f32,
+    elapsed: f32,
+    stiffness: f32,
+    damping: f32,
+) -> SpringTransition {
+    // Large elapsed intervals occur after a window is backgrounded. Integrate
+    // in short fixed steps so a resumed animation settles instead of exploding.
+    let steps = (elapsed / (1. / 120.)).ceil().max(1.) as usize;
+    let step = elapsed / steps as f32;
+    for _ in 0..steps {
+        let acceleration = stiffness * (target - state.position) - damping * state.velocity;
+        state.velocity += acceleration * step;
+        state.position += state.velocity * step;
+    }
+    state
 }
 
 /// Returns the current value for a spring travelling toward `target`.
@@ -308,25 +355,22 @@ pub fn spring<T>(
     policy: Spring,
     window: &mut Window,
     cx: &mut App,
-) -> T::Output
+) -> T
 where
-    T: SpringTarget,
+    T: SpringValue,
 {
     let id: ElementId = id.into().into();
     let now = cx.background_executor().now();
-    let target_position = target.target();
+    let target_position = target.to_spring_value();
     let state = window.use_keyed_state(id, cx, |_, _| SpringTransition {
-        state: SpringState {
-            position: target_position,
-            velocity: 0.0,
-        },
+        position: target_position,
+        velocity: 0.0,
         target: target_position,
         updated_at: now,
     });
 
     let snapshot = *state.read(cx);
-    let at_rest_on_target =
-        snapshot.state.position == target_position && snapshot.state.velocity == 0.0;
+    let at_rest_on_target = snapshot.position == target_position && snapshot.velocity == 0.0;
 
     // The overwhelmingly common case: a spring nothing is currently moving. It
     // has no state to advance and no frame to ask for, so it never builds a
@@ -339,21 +383,19 @@ where
     // stale clock cannot move the value — it only has to not produce a NaN, and
     // every term the propagator scales is finite.
     if at_rest_on_target {
-        return target.resolve(target_position);
+        return T::from_spring_value(target_position);
     }
 
     let settle = |state: &mut SpringTransition| {
-        state.state = SpringState {
-            position: target_position,
-            velocity: 0.0,
-        };
+        state.position = target_position;
+        state.velocity = 0.0;
         state.target = target_position;
         state.updated_at = now;
     };
 
     if cx.reduce_motion() || !policy.travel || policy.response.is_zero() {
         state.update(cx, |state, _| settle(state));
-        return target.resolve(target_position);
+        return T::from_spring_value(target_position);
     }
 
     // Advance over the frame that just elapsed, which the previous target
@@ -361,21 +403,24 @@ where
     let elapsed = now
         .saturating_duration_since(snapshot.updated_at)
         .as_secs_f32();
-    let config = policy.config();
-    let stepped = config.step(snapshot.state, snapshot.target, elapsed);
+    let (stiffness, damping) = policy.config();
+    let stepped = step_spring(snapshot, snapshot.target, elapsed, stiffness, damping);
 
-    if config.is_settled(stepped, target_position, policy.epsilon) {
+    if (stepped.position - target_position).abs() <= policy.epsilon
+        && stepped.velocity.abs() <= policy.epsilon
+    {
         state.update(cx, |state, _| settle(state));
-        return target.resolve(target_position);
+        return T::from_spring_value(target_position);
     }
 
     state.update(cx, |state, _| {
-        state.state = stepped;
+        state.position = stepped.position;
+        state.velocity = stepped.velocity;
         state.target = target_position;
         state.updated_at = now;
     });
     window.request_animation_frame();
-    target.resolve(stepped.position)
+    T::from_spring_value(stepped.position)
 }
 
 #[cfg(test)]
