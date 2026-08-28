@@ -231,7 +231,7 @@ pub fn init(cx: &mut App) {
 ///             "#,
 ///         )
 ///         .function("project_name", |_| Ok(HostValue::from("gpui-component")))
-///         .function("version", |_| Ok(HostValue::from("0.1.0"))),
+///         .function("version", |_| Ok(HostValue::from("0.2.0"))),
 /// )?;
 /// # Ok::<(), gpui_shell::HostError>(())
 /// ```

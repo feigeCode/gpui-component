@@ -6,6 +6,7 @@
 
 use crate::error::{Result as ShellResult, ShellError};
 use gpui::{Hsla, Pixels, px, rgba};
+use palette::FromColor;
 
 use crate::theme_tokens::{color_token_names, token_color};
 
@@ -104,7 +105,7 @@ fn parse_hex(hex: &str) -> Option<Hsla> {
         _ => return None,
     };
 
-    Some(rgba(rgba_value).into())
+    Some(Hsla::from_color(rgba(rgba_value)))
 }
 
 /// Reads the positional arguments of a bound method.

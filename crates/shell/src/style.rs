@@ -688,6 +688,7 @@ fn edit_distance(left: &str, right: &str) -> usize {
 mod tests {
     use super::*;
     use gpui::{Fill, Hsla};
+    use palette::FromColor as _;
 
     #[test]
     fn the_reflection_table_is_populated() {
@@ -729,7 +730,7 @@ mod tests {
         )
         .unwrap();
 
-        let expected: Fill = Hsla::from(gpui::rgba(0xff0000ff)).into();
+        let expected: Fill = Hsla::from_color(gpui::rgba(0xff0000ff)).into();
         assert_eq!(styled.background, Some(expected));
     }
 

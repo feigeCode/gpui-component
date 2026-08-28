@@ -901,7 +901,7 @@ mod tests {
               "id": "com.example.market",
               "name": "Market",
               "version": "1.0.0",
-              "shell-version": "0.1.0",
+              "shell-version": "0.2.0",
               "entry": "main.js",
               "capabilities": {
                 "network": { "hosts": ["quotes.example.com"] },

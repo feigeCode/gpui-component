@@ -1252,7 +1252,7 @@ mod tests {
         // inputs in `init` does: the palette arrives on a task afterwards.
         let style = super::editor_style();
         assert_eq!(
-            style.foreground.a, 0.,
+            style.foreground.alpha, 0.,
             "the shell must project nothing, or base cannot tell unset from chosen"
         );
 

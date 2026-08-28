@@ -14,8 +14,9 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
+use palette::FromColor;
 use gpui::{
-    AnyElement, App, BorderStyle, Bounds, ClipboardItem, Corners, Edges, Element, ElementId,
+    AnyElement, App, BorderStyle, Bounds, ClipboardItem, ColorExt as _, Corners, Edges, Element, ElementId,
     Entity, GlobalElementId, Hitbox, Hsla, InspectorElementId, InteractiveElement, IntoElement,
     LayoutId, PaintQuad, ParentElement, Pixels, Point, SharedString, StatefulInteractiveElement,
     Styled, StyledText, WeakEntity, Window, div, px, relative, rems, rgb, transparent_black,
@@ -489,11 +490,11 @@ pub fn clear_exit_handler() {
 /// interface underneath is one render behind, which the banner says out loud
 /// rather than leaving the reader to discover.
 pub fn error_banner(message: &str, window: &mut Window, cx: &mut App) -> AnyElement {
-    let surface = token("surface", rgb(0x171d26).into());
-    let foreground = token("foreground", rgb(0xe6ebf2).into());
-    let muted = token("muted_foreground", rgb(0x93a1b3).into());
-    let border = token("border", rgb(0x2a3240).into());
-    let accent = token("destructive", rgb(0xd05050).into());
+    let surface = token("surface", Hsla::from_color(rgb(0x171d26)));
+    let foreground = token("foreground", Hsla::from_color(rgb(0xe6ebf2)));
+    let muted = token("muted_foreground", Hsla::from_color(rgb(0x93a1b3)));
+    let border = token("border", Hsla::from_color(rgb(0x2a3240)));
+    let accent = token("destructive", Hsla::from_color(rgb(0xd05050)));
 
     let copied =
         window.use_keyed_state(SharedString::from("shell-banner-copied"), cx, |_, _| false);
@@ -631,12 +632,12 @@ pub fn failure_surface(
         }
     };
 
-    let background = token("background", rgb(0x11161d).into());
-    let surface = token("surface", rgb(0x171d26).into());
-    let foreground = token("foreground", rgb(0xe6ebf2).into());
-    let muted = token("muted_foreground", rgb(0x93a1b3).into());
-    let border = token("border", rgb(0x2a3240).into());
-    let accent = token("destructive", rgb(0xd05050).into());
+    let background = token("background", Hsla::from_color(rgb(0x11161d)));
+    let surface = token("surface", Hsla::from_color(rgb(0x171d26)));
+    let foreground = token("foreground", Hsla::from_color(rgb(0xe6ebf2)));
+    let muted = token("muted_foreground", Hsla::from_color(rgb(0x93a1b3)));
+    let border = token("border", Hsla::from_color(rgb(0x2a3240)));
+    let accent = token("destructive", Hsla::from_color(rgb(0xd05050)));
 
     let copied =
         window.use_keyed_state(SharedString::from("shell-failure-copied"), cx, |_, _| false);
@@ -843,7 +844,7 @@ fn paint_selection(layout: &gpui::TextLayout, range: Range<usize>, window: &mut 
             Point::new(end.x, end.y + line_height),
         ));
     }
-    let color = token("primary", rgb(0x4d8cff).into()).opacity(0.28);
+    let color = token("primary", Hsla::from_color(rgb(0x4d8cff))).opacity(0.28);
     for bounds in quads {
         window.paint_quad(PaintQuad {
             bounds,

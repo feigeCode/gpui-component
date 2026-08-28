@@ -2,6 +2,7 @@
 use crate::{theme_tokens, value::Bridged};
 use gpui_base::{Theme, ThemeAppearance};
 use rquickjs::{Ctx, Exception, Object, Result as JsResult, Value, function::Func};
+use palette::FromColor;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -189,7 +190,7 @@ fn snapshot_json() -> String {
     )
 }
 fn hex(color: gpui::Hsla) -> String {
-    let c = gpui::Rgba::from(color);
+    let c = gpui::Rgba::from_color(color);
     let b = |v: f32| (v.clamp(0., 1.) * 255.).round() as u8;
-    format!("#{:02x}{:02x}{:02x}", b(c.r), b(c.g), b(c.b))
+    format!("#{:02x}{:02x}{:02x}", b(c.color.red), b(c.color.green), b(c.color.blue))
 }

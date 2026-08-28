@@ -27,7 +27,7 @@ use rquickjs::{
     Array, Context as JsContext, Ctx, Error as JsError, Exception, FromJs, Function, Object,
     Persistent, Result as JsResult, Runtime as JsRuntime, Value,
     function::{Func, Opt, This},
-    loader::{BuiltinResolver, ImportAttributes, Loader, ModuleLoader, Resolver},
+    loader::{BuiltinResolver, Loader, ModuleLoader, Resolver},
     module::Declared,
     module::{Declarations, Exports, Module, ModuleDef},
 };
@@ -3387,7 +3387,6 @@ impl Resolver for AppModules {
         ctx: &Ctx<'js>,
         base: &str,
         name: &str,
-        _attributes: Option<ImportAttributes<'js>>,
     ) -> JsResult<String> {
         let Some(application) = self.application_for_base(base) else {
             return Err(Exception::throw_message(
@@ -3442,7 +3441,6 @@ impl Loader for AppModules {
         &mut self,
         ctx: &Ctx<'js>,
         name: &str,
-        _attributes: Option<ImportAttributes<'js>>,
     ) -> JsResult<Module<'js, Declared>> {
         let path = Self::untag(name);
         let source = read_module_source(Path::new(path))

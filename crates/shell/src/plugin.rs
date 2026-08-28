@@ -787,7 +787,7 @@ fn field_expectation(field: &str) -> &'static str {
             "a human-readable name such as \"Inbox\", shown in menus and in the permission prompt"
         }
         "version" => "the plugin's own semantic version such as \"1.2.0\"",
-        "shell-version" => "the oldest compatible gpui-shell semantic version, such as \"0.1.0\"",
+        "shell-version" => "the oldest compatible gpui-shell semantic version, such as \"0.2.0\"",
         "entry" => {
             "the module to evaluate at load, such as \"main.js\", relative to the plugin directory"
         }
@@ -850,7 +850,7 @@ impl std::fmt::Display for ManifestProblem {
             ),
             ManifestProblem::InvalidShellVersion(version) => write!(
                 f,
-                "invalid `shell-version` \"{version}\": expected a semantic version such as \"0.1.0\""
+                "invalid `shell-version` \"{version}\": expected a semantic version such as \"0.2.0\""
             ),
             ManifestProblem::IncompatibleShellVersion { required, runtime } => write!(
                 f,
@@ -1366,7 +1366,7 @@ mod tests {
         "id": "com.example.inbox",
         "name": "Inbox",
         "version": "1.2.0",
-        "shell-version": "0.1.0",
+        "shell-version": "0.2.0",
         "entry": "main.js",
         "capabilities": {
             "fs": {
@@ -1660,7 +1660,7 @@ mod tests {
             "id": "com.example.async-init",
             "name": "Async Init",
             "version": "1.0.0",
-            "shell-version": "0.1.0",
+            "shell-version": "0.2.0",
             "entry": "main.js",
             "capabilities": {
                 "fs": { "read": ["${pluginDir}"] }
@@ -1911,7 +1911,7 @@ mod tests {
 
     #[test]
     fn an_omitted_shell_version_accepts_the_current_runtime() {
-        let source = VALID.replace("        \"shell-version\": \"0.1.0\",\n", "");
+        let source = VALID.replace("        \"shell-version\": \"0.2.0\",\n", "");
         let manifest = PluginManifest::parse(&source)
             .expect("omitting shell-version supports the runtime loading the application");
         assert_eq!(manifest.shell_version(), SHELL_VERSION);
@@ -2001,7 +2001,7 @@ mod tests {
     #[test]
     fn an_absent_capabilities_block_grants_nothing_but_storage() {
         let manifest = PluginManifest::parse(
-            r#"{"id": "a.b", "name": "B", "version": "0.1.0", "shell-version": "0.1.0", "entry": "main.js"}"#,
+            r#"{"id": "a.b", "name": "B", "version": "0.1.0", "shell-version": "0.2.0", "entry": "main.js"}"#,
         )
         .expect("capabilities may be omitted");
 
@@ -2018,7 +2018,7 @@ mod tests {
     #[test]
     fn a_manifest_may_still_refuse_storage() {
         let manifest = PluginManifest::parse(
-            r#"{"id": "a.b", "name": "B", "version": "0.1.0", "shell-version": "0.1.0",
+            r#"{"id": "a.b", "name": "B", "version": "0.1.0", "shell-version": "0.2.0",
                 "entry": "main.js", "capabilities": {"storage": false}}"#,
         )
         .expect("storage may be declined");
@@ -2035,7 +2035,7 @@ mod tests {
     #[test]
     fn declaring_another_grant_does_not_cost_an_application_its_storage() {
         let manifest = PluginManifest::parse(
-            r#"{"id": "a.b", "name": "B", "version": "0.1.0", "shell-version": "0.1.0",
+            r#"{"id": "a.b", "name": "B", "version": "0.1.0", "shell-version": "0.2.0",
                 "entry": "main.js", "capabilities": {"network": {"hosts": ["example.com"]}}}"#,
         )
         .expect("a network grant is legal on its own");
@@ -2073,7 +2073,7 @@ mod tests {
     #[test]
     fn a_field_of_the_wrong_type_says_which_and_what() {
         let error = PluginManifest::parse(
-            r#"{"id": "a.b", "name": 7, "version": "0.1.0", "shell-version": "0.1.0", "entry": "main.js"}"#,
+            r#"{"id": "a.b", "name": 7, "version": "0.1.0", "shell-version": "0.2.0", "entry": "main.js"}"#,
         )
         .expect_err("a numeric name is not a name");
 
@@ -2374,8 +2374,8 @@ mod tests {
 
     #[test]
     fn incompatible_shell_versions_are_rejected_before_discovery() {
-        for required in ["0.2.0", "1.0.0"] {
-            let source = VALID.replacen("\"0.1.0\"", &format!("\"{required}\""), 1);
+        for required in ["0.1.0", "1.0.0"] {
+            let source = VALID.replacen("\"0.2.0\"", &format!("\"{required}\""), 1);
             let error = PluginManifest::parse(&source).expect_err("incompatible shell version");
             assert!(
                 matches!(
@@ -2390,7 +2390,7 @@ mod tests {
     #[test]
     fn malformed_shell_versions_are_errors_not_panics() {
         for required in ["0.1.0-", "00.1.0", "0.1.184467440737095516160", "latest"] {
-            let source = VALID.replacen("\"0.1.0\"", &format!("\"{required}\""), 1);
+            let source = VALID.replacen("\"0.2.0\"", &format!("\"{required}\""), 1);
             let error = PluginManifest::parse(&source).expect_err("invalid semantic version");
             assert_eq!(
                 error.problem(),

@@ -60,7 +60,7 @@ use rquickjs::{
     Array, Ctx, Error as JsError, Exception, FromJs, IntoJs, Module, Object, Promise,
     Result as JsResult, Value,
     function::{Func, Rest},
-    loader::{ImportAttributes, Loader, Resolver},
+    loader::{Loader, Resolver},
     module::Declared,
 };
 
@@ -192,7 +192,6 @@ impl Resolver for HostModuleLoader {
         _ctx: &Ctx<'js>,
         base: &str,
         name: &str,
-        _attributes: Option<ImportAttributes<'js>>,
     ) -> JsResult<String> {
         // Only a bare specifier: a relative or rooted path is the application's
         // own file, and answering for one here would let a registered module
@@ -215,7 +214,6 @@ impl Loader for HostModuleLoader {
         &mut self,
         ctx: &Ctx<'js>,
         name: &str,
-        _attributes: Option<ImportAttributes<'js>>,
     ) -> JsResult<Module<'js, Declared>> {
         let Some((module, generation)) = Self::untag(name) else {
             // Not a name this resolver produced, so it belongs to a loader
