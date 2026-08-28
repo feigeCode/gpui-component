@@ -1,8 +1,10 @@
-use gpui::{App, FontWeight, HighlightStyle, Hsla, SharedString};
+use gpui::{App, ColorExt as _, FontWeight, HighlightStyle, Hsla, SharedString};
+use palette::WithAlpha as _;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{
+    borrow::Cow,
     collections::HashMap,
     ops::Deref,
     sync::{Arc, LazyLock, Mutex},
@@ -107,7 +109,7 @@ impl LanguageConfig {
 /// Theme for Tree-sitter Highlight
 ///
 /// https://docs.rs/tree-sitter-highlight/0.26.8/tree_sitter_highlight/
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SyntaxColors {
     pub attribute: Option<ThemeStyle>,
     pub boolean: Option<ThemeStyle>,
@@ -169,7 +171,7 @@ pub struct SyntaxColors {
     pub variant: Option<ThemeStyle>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FontStyle {
     Normal,
@@ -217,8 +219,10 @@ impl From<FontWeightContent> for FontWeight {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ThemeStyle {
+    #[serde(deserialize_with = "crate::deserialize_optional_hsla")]
     color: Option<Hsla>,
     font_style: Option<FontStyle>,
     font_weight: Option<FontWeightContent>,
@@ -309,37 +313,38 @@ impl SyntaxColors {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct StatusColors {
-    #[serde(rename = "error")]
+    #[serde(rename = "error", deserialize_with = "crate::deserialize_optional_hsla")]
     error: Option<Hsla>,
-    #[serde(rename = "error.background")]
+    #[serde(rename = "error.background", deserialize_with = "crate::deserialize_optional_hsla")]
     error_background: Option<Hsla>,
-    #[serde(rename = "error.border")]
+    #[serde(rename = "error.border", deserialize_with = "crate::deserialize_optional_hsla")]
     error_border: Option<Hsla>,
-    #[serde(rename = "warning")]
+    #[serde(rename = "warning", deserialize_with = "crate::deserialize_optional_hsla")]
     warning: Option<Hsla>,
-    #[serde(rename = "warning.background")]
+    #[serde(rename = "warning.background", deserialize_with = "crate::deserialize_optional_hsla")]
     warning_background: Option<Hsla>,
-    #[serde(rename = "warning.border")]
+    #[serde(rename = "warning.border", deserialize_with = "crate::deserialize_optional_hsla")]
     warning_border: Option<Hsla>,
-    #[serde(rename = "info")]
+    #[serde(rename = "info", deserialize_with = "crate::deserialize_optional_hsla")]
     info: Option<Hsla>,
-    #[serde(rename = "info.background")]
+    #[serde(rename = "info.background", deserialize_with = "crate::deserialize_optional_hsla")]
     info_background: Option<Hsla>,
-    #[serde(rename = "info.border")]
+    #[serde(rename = "info.border", deserialize_with = "crate::deserialize_optional_hsla")]
     info_border: Option<Hsla>,
-    #[serde(rename = "success")]
+    #[serde(rename = "success", deserialize_with = "crate::deserialize_optional_hsla")]
     success: Option<Hsla>,
-    #[serde(rename = "success.background")]
+    #[serde(rename = "success.background", deserialize_with = "crate::deserialize_optional_hsla")]
     success_background: Option<Hsla>,
-    #[serde(rename = "success.border")]
+    #[serde(rename = "success.border", deserialize_with = "crate::deserialize_optional_hsla")]
     success_border: Option<Hsla>,
-    #[serde(rename = "hint")]
+    #[serde(rename = "hint", deserialize_with = "crate::deserialize_optional_hsla")]
     hint: Option<Hsla>,
-    #[serde(rename = "hint.background")]
+    #[serde(rename = "hint.background", deserialize_with = "crate::deserialize_optional_hsla")]
     hint_background: Option<Hsla>,
-    #[serde(rename = "hint.border")]
+    #[serde(rename = "hint.border", deserialize_with = "crate::deserialize_optional_hsla")]
     hint_border: Option<Hsla>,
 }
 
@@ -353,7 +358,7 @@ impl StatusColors {
     pub fn error_background(&self, cx: &App) -> Hsla {
         let bg = cx.theme().background;
         self.error_background
-            .unwrap_or(bg.blend(self.error(cx).alpha(0.2)))
+            .unwrap_or(bg.blend(&self.error(cx).with_alpha(0.2)))
     }
 
     #[inline]
@@ -370,7 +375,7 @@ impl StatusColors {
     pub fn warning_background(&self, cx: &App) -> Hsla {
         let bg = cx.theme().background;
         self.warning_background
-            .unwrap_or(bg.blend(self.warning(cx).alpha(0.2)))
+            .unwrap_or(bg.blend(&self.warning(cx).with_alpha(0.2)))
     }
 
     #[inline]
@@ -387,7 +392,7 @@ impl StatusColors {
     pub fn info_background(&self, cx: &App) -> Hsla {
         let bg = cx.theme().background;
         self.info_background
-            .unwrap_or(bg.blend(self.info(cx).alpha(0.2)))
+            .unwrap_or(bg.blend(&self.info(cx).with_alpha(0.2)))
     }
 
     #[inline]
@@ -404,7 +409,7 @@ impl StatusColors {
     pub fn success_background(&self, cx: &App) -> Hsla {
         let bg = cx.theme().background;
         self.success_background
-            .unwrap_or(bg.blend(self.success(cx).alpha(0.2)))
+            .unwrap_or(bg.blend(&self.success(cx).with_alpha(0.2)))
     }
 
     #[inline]
@@ -421,7 +426,7 @@ impl StatusColors {
     pub fn hint_background(&self, cx: &App) -> Hsla {
         let bg = cx.theme().background;
         self.hint_background
-            .unwrap_or(bg.blend(self.hint(cx).alpha(0.2)))
+            .unwrap_or(bg.blend(&self.hint(cx).with_alpha(0.2)))
     }
 
     #[inline]
@@ -430,23 +435,24 @@ impl StatusColors {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HighlightThemeStyle {
-    #[serde(rename = "editor.background")]
+    #[serde(rename = "editor.background", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_background: Option<Hsla>,
-    #[serde(rename = "editor.foreground")]
+    #[serde(rename = "editor.foreground", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_foreground: Option<Hsla>,
-    #[serde(rename = "editor.active_line.background")]
+    #[serde(rename = "editor.active_line.background", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_active_line: Option<Hsla>,
-    #[serde(rename = "editor.line_number")]
+    #[serde(rename = "editor.line_number", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_line_number: Option<Hsla>,
-    #[serde(rename = "editor.active_line_number")]
+    #[serde(rename = "editor.active_line_number", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_active_line_number: Option<Hsla>,
-    #[serde(rename = "editor.invisible")]
+    #[serde(rename = "editor.invisible", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_invisible: Option<Hsla>,
     /// Optional background color for the gutter (line-number column).
     /// Falls back to [`Self::editor_background`] when unset.
-    #[serde(rename = "editor.gutter.background")]
+    #[serde(rename = "editor.gutter.background", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_gutter_background: Option<Hsla>,
     #[serde(flatten)]
     pub status: StatusColors,
@@ -459,12 +465,42 @@ pub struct HighlightThemeStyle {
 /// This json is compatible with the Zed theme format.
 ///
 /// https://zed.dev/docs/extensions/languages#syntax-highlighting
-#[derive(Debug, Clone, PartialEq, Eq, Hash, JsonSchema, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HighlightTheme {
     pub name: String,
     #[serde(default)]
     pub appearance: ThemeMode,
     pub style: HighlightThemeStyle,
+}
+
+impl JsonSchema for HighlightThemeStyle {
+    fn schema_name() -> Cow<'static, str> {
+        "HighlightThemeStyle".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "object" })
+    }
+}
+
+impl JsonSchema for SyntaxColors {
+    fn schema_name() -> Cow<'static, str> {
+        "SyntaxColors".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "object" })
+    }
+}
+
+impl JsonSchema for HighlightTheme {
+    fn schema_name() -> Cow<'static, str> {
+        "HighlightTheme".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "object" })
+    }
 }
 
 impl Deref for HighlightTheme {

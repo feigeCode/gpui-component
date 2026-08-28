@@ -419,7 +419,7 @@ mod tests {
             default_title_bar_background(title_bar, background),
             linear_gradient(
                 180.,
-                linear_color_stop(Rgba::new(0.45, 0.45, 0.45, 1.).into_color(), 0.,),
+                linear_color_stop(gpui::rgb_to_hsla(Rgba::new(0.45, 0.45, 0.45, 1.)), 0.,),
                 linear_color_stop(title_bar, 1.),
             )
         );

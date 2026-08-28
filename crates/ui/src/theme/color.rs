@@ -281,18 +281,18 @@ impl Colorize for Hsla {
         if rgb.alpha < 1. {
             return format!(
                 "#{:02X}{:02X}{:02X}{:02X}",
-                ((rgb.color.red * 255.) as u32),
-                ((rgb.color.green * 255.) as u32),
-                ((rgb.color.blue * 255.) as u32),
-                ((self.alpha * 255.) as u32)
+                (rgb.color.red * 255.).round() as u32,
+                (rgb.color.green * 255.).round() as u32,
+                (rgb.color.blue * 255.).round() as u32,
+                (self.alpha * 255.).round() as u32
             );
         }
 
         format!(
             "#{:02X}{:02X}{:02X}",
-            ((rgb.color.red * 255.) as u32),
-            ((rgb.color.green * 255.) as u32),
-            ((rgb.color.blue * 255.) as u32)
+            (rgb.color.red * 255.).round() as u32,
+            (rgb.color.green * 255.).round() as u32,
+            (rgb.color.blue * 255.).round() as u32
         )
     }
 
@@ -347,7 +347,7 @@ impl Colorize for Hsla {
 
 #[inline]
 fn hue(color: Hsla) -> f32 {
-    color.color.hue.into_degrees() / 360.
+    color.color.hue.into_degrees().rem_euclid(360.) / 360.
 }
 
 pub(crate) static DEFAULT_COLORS: once_cell::sync::Lazy<ShadcnColors> =
@@ -762,6 +762,18 @@ pub fn try_parse_color(color: &str) -> Result<Hsla> {
     Ok(hsla)
 }
 
+/// Deserialize theme colors from the string syntax accepted by
+/// [`try_parse_color`]. Palette's structural `Hsla` deserializer cannot read
+/// the hex and named colors used by GPUI theme files.
+pub(crate) fn deserialize_optional_hsla<'de, D>(deserializer: D) -> Result<Option<Hsla>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)?.map_or(Ok(None), |value| {
+        try_parse_color(&value).map(Some).map_err(serde::de::Error::custom)
+    })
+}
+
 /// Try to parse a theme background value.
 ///
 /// Supports all values accepted by [`try_parse_color`] and CSS-style two-stop
@@ -1016,7 +1028,7 @@ mod tests {
 
         assert_eq!(red.mix(blue, 0.5).to_hex(), "#FF00FF");
         assert_eq!(green.mix(red, 0.5).to_hex(), "#FFFF00");
-        assert_eq!(blue.mix(yellow, 0.2).to_hex(), "#0098FF");
+        assert_eq!(blue.mix(yellow, 0.2).to_hex(), "#0099FF");
     }
 
     #[test]
@@ -1078,8 +1090,8 @@ mod tests {
         assert_eq!(format!("{:?}", ColorName::Yellow), "Yellow");
 
         let color = ColorName::Green;
-        assert_eq!(color.scale(500).to_hex(), "#21C55E");
-        assert_eq!(color.scale(1500).to_hex(), "#21C55E");
+        assert_eq!(color.scale(500).to_hex(), "#22C55E");
+        assert_eq!(color.scale(1500).to_hex(), "#22C55E");
 
         for name in ColorName::all().iter() {
             let name1: ColorName = name.to_string().as_str().try_into().unwrap();

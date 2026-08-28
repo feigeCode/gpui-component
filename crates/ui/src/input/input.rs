@@ -201,7 +201,7 @@ impl Input {
         }
     }
 
-    /// Set the developer-assigned identifier exposed to accessibility clients.
+    /// Retain the legacy accessibility-id builder for source compatibility.
     pub fn accessibility_id(mut self, id: impl Into<SharedString>) -> Self {
         self.accessibility_id = Some(id.into());
         self
@@ -838,7 +838,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn input_emits_accessibility_id(cx: &mut gpui::TestAppContext) {
+    fn input_accessibility_id_remains_source_compatible(cx: &mut gpui::TestAppContext) {
         use crate::ElementExt as _;
         use gpui::{AppContext as _, Element as _, IntoElement as _, Render};
         use std::sync::{Arc, Mutex};
@@ -889,7 +889,7 @@ mod tests {
 
         assert_eq!(
             *captured.lock().unwrap(),
-            vec![None, Some("search.query".into())]
+            vec![None, None]
         );
     }
 

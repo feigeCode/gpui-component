@@ -127,8 +127,10 @@ pub enum FontWeightContent {
     Black = 900,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ThemeStyle {
+    #[serde(deserialize_with = "crate::deserialize_optional_hsla")]
     pub color: Option<gpui::Hsla>,
     pub font_style: Option<FontStyle>,
     pub font_weight: Option<FontWeightContent>,
@@ -399,14 +401,21 @@ impl StatusColors {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HighlightThemeStyle {
+    #[serde(rename = "editor.background", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_background: Option<gpui::Hsla>,
+    #[serde(rename = "editor.foreground", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_foreground: Option<gpui::Hsla>,
+    #[serde(rename = "editor.active_line.background", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_active_line: Option<gpui::Hsla>,
+    #[serde(rename = "editor.line_number", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_line_number: Option<gpui::Hsla>,
+    #[serde(rename = "editor.active_line_number", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_active_line_number: Option<gpui::Hsla>,
+    #[serde(rename = "editor.invisible", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_invisible: Option<gpui::Hsla>,
-    #[serde(rename = "editor.gutter.background")]
+    #[serde(rename = "editor.gutter.background", deserialize_with = "crate::deserialize_optional_hsla")]
     pub editor_gutter_background: Option<gpui::Hsla>,
     #[serde(flatten)]
     pub status: StatusColors,
