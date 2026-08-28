@@ -3,9 +3,9 @@ use std::time::Duration;
 use instant::Instant;
 
 use gpui::{
-    Bounds, Context, Div, Hsla, InteractiveElement as _, IntoElement, ParentElement, PathBuilder,
-    Pixels, Point, Render, StatefulInteractiveElement as _, Styled, Window, canvas, div, point,
-    prelude::FluentBuilder as _, px, relative,
+    Bounds, ColorExt as _, Context, Div, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement, PathBuilder, Pixels, Point, Render, StatefulInteractiveElement as _, Styled,
+    Window, canvas, div, point, prelude::FluentBuilder as _, px, relative,
 };
 
 #[cfg(not(target_family = "wasm"))]
