@@ -39,7 +39,7 @@ impl ChatExample {
                 .p_3()
                 .rounded(cx.theme().radius_lg)
                 .bg(if mine {
-                    cx.theme().primary.opacity(0.1)
+                    gpui_component::Colorize::opacity(&cx.theme().primary, 0.1)
                 } else {
                     cx.theme().muted
                 })

@@ -65,15 +65,6 @@ struct DiskInfo {
     used: u64,
 }
 
-/// Battery info for display
-#[derive(Clone)]
-struct BatteryInfo {
-    #[allow(dead_code)]
-    model: String,
-    icon: IconName,
-    percentage: f32,
-}
-
 /// Sort field for processes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum ProcessSortField {
@@ -264,7 +255,6 @@ pub struct SystemMonitor {
     active_tab: MonitorTab,
     process_table: Entity<TableState<ProcessTableDelegate>>,
     disk_info: Vec<DiskInfo>,
-    battery_info: Vec<BatteryInfo>,
 }
 
 impl SystemMonitor {
@@ -290,7 +280,6 @@ impl SystemMonitor {
             active_tab: MonitorTab::System,
             process_table,
             disk_info: Vec::new(),
-            battery_info: Vec::new(),
         };
 
         // Collect initial data
@@ -364,35 +353,6 @@ impl SystemMonitor {
             })
             .collect();
 
-        // Update battery info
-        self.update_battery_info();
-    }
-
-    fn update_battery_info(&mut self) {
-        self.battery_info.clear();
-
-        if let Ok(manager) = battery::Manager::new()
-            && let Ok(batteries) = manager.batteries()
-        {
-            for battery in batteries.flatten() {
-                let icon = match battery.state() {
-                    battery::State::Charging => IconName::BatteryCharging,
-                    battery::State::Discharging => IconName::BatteryMedium,
-                    battery::State::Full => IconName::BatteryFull,
-                    battery::State::Empty => IconName::Battery,
-                    _ => IconName::Battery,
-                };
-
-                self.battery_info.push(BatteryInfo {
-                    model: battery
-                        .model()
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "Battery".to_string()),
-                    icon,
-                    percentage: battery.state_of_charge().value * 100.0,
-                });
-            }
-        }
     }
 
     fn set_active_tab(&mut self, index: usize, _window: &mut Window, cx: &mut Context<Self>) {
@@ -474,7 +434,6 @@ impl SystemMonitor {
 
     fn render_status_bar(&self, cx: &Context<Self>) -> impl IntoElement {
         let primary_disk = self.disk_info.first();
-        let primary_battery = self.battery_info.first();
 
         h_flex()
             .px_3()
@@ -534,18 +493,6 @@ impl SystemMonitor {
                             .child(Progress::new("status-cpu").w_12().h_2().value(cpu_percent))
                             .child(format!("{:.0}%", cpu_percent))
                     }),
-            )
-            .child(
-                // Battery info
-                div().when_some(primary_battery, |this, battery| {
-                    this.child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(Icon::new(battery.icon.clone()))
-                            .child(format!("{:.0}%", battery.percentage)),
-                    )
-                }),
             )
     }
 }

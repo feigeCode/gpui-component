@@ -84,7 +84,9 @@ impl Render for HelloWorld {
                             .border_color(gpui::black())
                             .items_center()
                             .justify_center()
-                            .hover(|this| this.bg(gpui::yellow().opacity(0.2)))
+                            .hover(|this| {
+                                this.bg(gpui_component::Colorize::opacity(&gpui::yellow(), 0.2))
+                            })
                             .child("Hover test here.")
                             .child("Right click to show Context Menu")
                             .context_menu({

@@ -111,7 +111,7 @@ impl Render for Example {
                             .p_4()
                             .grid()
                             .grid_cols(4)
-                            .bg(cx.theme().accent.opacity(0.1))
+                            .bg(gpui_component::Colorize::opacity(&cx.theme().accent, 0.1))
                             .rounded(cx.theme().radius)
                             .border_1()
                             .border_color(cx.theme().accent)
