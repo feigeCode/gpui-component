@@ -1,17 +1,20 @@
 [package]
 description = "Behavior, interaction, and infrastructure foundations for GPUI applications."
 keywords = ["desktop", "gpui", "ui", "foundation"]
-license = "Apache-2.0"
-name = "gpui-base"
-default-run = "components"
-repository = "https://github.com/longbridge/gpui-component"
-homepage = "https://longbridge.github.io/gpui-component"
-documentation = "https://docs.rs/gpui-base"
-version = "0.5.2"
-publish = false
+license.workspace = true
+name = "gpui_ce_components_base"
+# `src/bin/components.rs` is a repository-only showcase launcher that pulls in
+# sibling UI sources. It is not part of the standalone foundation crate.
+autobins = false
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/gpui_ce_components_base"
+version.workspace = true
+publish = true
 edition.workspace = true
 
 [lib]
+name = "gpui_base"
 doctest = false
 
 [features]

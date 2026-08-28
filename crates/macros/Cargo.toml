@@ -1,12 +1,15 @@
 [package]
-name = "gpui-component-macros"
+name = "gpui_ce_components_macros"
 description = "Macros for GPUI Component."
-version = "0.5.1"
-license = "Apache-2.0"
+version.workspace = true
+license.workspace = true
 publish = true
 edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
+name = "gpui_component_macros"
 proc-macro = true
 
 [lints]

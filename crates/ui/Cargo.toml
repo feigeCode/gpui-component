@@ -1,21 +1,21 @@
 [package]
 description = "UI components for building fantastic desktop application by using GPUI."
 keywords = ["desktop", "gpui", "shadcn", "ui", "uikit"]
-license = "Apache-2.0"
-name = "gpui-component"
-documentation = "https://docs.rs/gpui-component"
-homepage = "https://longbridge.github.io/gpui-component"
-repository = "https://github.com/longbridge/gpui-component"
+license.workspace = true
+name = "gpui_ce_components"
+documentation = "https://docs.rs/gpui_ce_components"
+homepage.workspace = true
+repository.workspace = true
 readme = "../../README.md"
-version = "0.5.2"
+version.workspace = true
 publish = true
 edition.workspace = true
 
 [lib]
+name = "gpui_component"
 doctest = false
 
 [features]
-decimal = ["dep:rust_decimal"]
 inspector = ["gpui_macros/inspector", "gpui/inspector", "gpui-base/inspector"]
 tree-sitter = ["dep:tree-sitter", "dep:tree-sitter-json"]
 
@@ -127,7 +127,6 @@ futures = "0.3"
 
 # Chart
 num-traits = "0.2"
-rust_decimal = { version = "1.37.0", optional = true }
 
 # Markdown Parser
 markdown = { version = "1.0.0", features = ["serde"] }

@@ -1,17 +1,18 @@
 [package]
-name = "gpui-fps"
+name = "gpui_ce_components_fps"
 description = "Realtime FPS, frame time, CPU, GPU and memory HUD for GPUI applications."
 keywords = ["fps", "gpui", "hud", "performance", "profiling"]
-license = "Apache-2.0"
-documentation = "https://docs.rs/gpui-fps"
-homepage = "https://longbridge.github.io/gpui-component"
-repository = "https://github.com/longbridge/gpui-component/tree/main/crates/fps"
+license.workspace = true
+documentation = "https://docs.rs/gpui_ce_components_fps"
+homepage.workspace = true
+repository.workspace = true
 readme = "README.md"
 edition.workspace = true
-publish = false
-version = "0.1.0"
+publish = true
+version.workspace = true
 
 [lib]
+name = "gpui_fps"
 doctest = false
 
 [dependencies]

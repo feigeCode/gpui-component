@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-[![Build Status](https://github.com/longbridge/gpui-component/actions/workflows/ci.yml/badge.svg)](https://github.com/longbridge/gpui-component/actions/workflows/ci.yml) [![Docs](https://docs.rs/gpui-component/badge.svg)](https://docs.rs/gpui-component/) [![Crates.io](https://img.shields.io/crates/v/gpui-component.svg)](https://crates.io/crates/gpui-component)
+[![Build Status](https://github.com/gpui-ce/gpui-component/actions/workflows/ci.yml/badge.svg)](https://github.com/gpui-ce/gpui-component/actions/workflows/ci.yml)
 
 使用 Rust 和 [GPUI](https://gpui.rs) 构建出色、高性能的桌面应用。
 
@@ -83,9 +83,9 @@ GPUI Component 从第一天起就用于构建 [Longbridge Pro](https://longbridg
 ## Usage
 
 ```toml
-gpui = { git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui = { package = "gpui_ce", version = "0.2.2" }
+gpui_platform = { package = "gpui_ce_platform", version = "0.1.0", features = ["font-kit"] }
+gpui-component = { package = "gpui_ce_components", version = "0.2.0" }
 ```
 
 ### 基础示例
@@ -135,7 +135,7 @@ fn main() {
 
 GPUI Component 提供了 `Icon` 元素，但默认不包含 SVG 文件。
 
-示例使用 [Lucide](https://lucide.dev) 图标，但你可以使用任意喜欢的图标。只需按照 [IconName](https://github.com/longbridge/gpui-component/blob/main/crates/ui/src/icon.rs#L86) 中的定义命名 SVG 文件，然后将所需图标添加到项目中即可。
+示例使用 [Lucide](https://lucide.dev) 图标，但你可以使用任意喜欢的图标。只需按照 [IconName](https://github.com/gpui-ce/gpui-component/blob/main/crates/ui/src/icon.rs#L86) 中的定义命名 SVG 文件，然后将所需图标添加到项目中即可。
 
 ## AI 编码 Agent 技能 (Skills)
 

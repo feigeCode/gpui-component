@@ -6,7 +6,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-[![Build Status](https://github.com/longbridge/gpui-component/actions/workflows/ci.yml/badge.svg)](https://github.com/longbridge/gpui-component/actions/workflows/ci.yml) [![Docs](https://docs.rs/gpui-component/badge.svg)](https://docs.rs/gpui-component/) [![Crates.io](https://img.shields.io/crates/v/gpui-component.svg)](https://crates.io/crates/gpui-component)
+[![Build Status](https://github.com/gpui-ce/gpui-component/actions/workflows/ci.yml/badge.svg)](https://github.com/gpui-ce/gpui-component/actions/workflows/ci.yml)
 
 Build fantastic, high-performance desktop apps with Rust and [GPUI](https://gpui.rs).
 
@@ -95,9 +95,9 @@ commercial desktop application rather than designed in isolation.
 ## Usage
 
 ```toml
-gpui = { git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui = { package = "gpui_ce", version = "0.2.2" }
+gpui_platform = { package = "gpui_ce_platform", version = "0.1.0", features = ["font-kit"] }
+gpui-component = { package = "gpui_ce_components", version = "0.2.0" }
 ```
 
 ### Basic Example
@@ -147,7 +147,7 @@ fn main() {
 
 GPUI Component has an `Icon` element, but it does not include SVG files by default.
 
-The example uses [Lucide](https://lucide.dev) icons, but you can use any icons you like. Just name the SVG files as defined in [IconName](https://github.com/longbridge/gpui-component/blob/main/crates/ui/src/icon.rs#L86). You can add any icons you need to your project.
+The example uses [Lucide](https://lucide.dev) icons, but you can use any icons you like. Just name the SVG files as defined in [IconName](https://github.com/gpui-ce/gpui-component/blob/main/crates/ui/src/icon.rs#L86). You can add any icons you need to your project.
 
 ## Skills for AI Coding Agents
 

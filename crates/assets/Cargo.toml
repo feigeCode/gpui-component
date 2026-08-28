@@ -1,15 +1,15 @@
 [package]
-name = "gpui-component-assets"
+name = "gpui_ce_components_assets"
 description = "Default bundled assets for GPUI Component."
 keywords = ["desktop", "gpui", "shadcn", "ui", "uikit"]
-license = "Apache-2.0"
-documentation = "https://docs.rs/gpui-component"
-homepage = "https://longbridge.github.io/gpui-component"
-repository = "https://github.com/longbridge/gpui-component"
+license.workspace = true
+documentation = "https://docs.rs/gpui_ce_components_assets"
+homepage.workspace = true
+repository.workspace = true
 readme = "README.md"
 edition.workspace = true
 publish = true
-version = "0.5.1"
+version.workspace = true
 
 # `links` is the documented cargo mechanism for sharing build-time metadata
 # across the dep graph: every dependent (regular OR build-dep) receives the
@@ -24,6 +24,7 @@ version = "0.5.1"
 links = "gpui-component-default-icons"
 
 [lib]
+name = "gpui_component_assets"
 doctest = false
 
 [dependencies]

@@ -7,7 +7,7 @@ assignees:
 
 ## Description
 
-Use English with clear and concise description of the bug, if you just have a question or need help, please submit to [Discussions](https://github.com/longbridge/gpui-component/discussions/categories/q-a).
+Use English with clear and concise description of the bug. For questions or help, please use [Discussions](https://github.com/gpui-ce/gpui-component/discussions/categories/q-a).
 
 ## Environment
 

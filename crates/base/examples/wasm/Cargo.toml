@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 gpui.workspace = true
-gpui-base = { path = "../.." }
+gpui-base = { package = "gpui_ce_components_base", path = "../.." }
 gpui_platform.workspace = true
 console_error_panic_hook = "0.1"
 console_log = "1.0"
