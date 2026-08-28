@@ -124,13 +124,14 @@ impl InputEditorStyle {
 
 impl Default for InputEditorStyle {
     fn default() -> Self {
+        let unset = gpui::transparent_black();
         Self {
-            foreground: Hsla::default(),
-            muted_foreground: Hsla::default(),
-            background: Hsla::default(),
-            border: Hsla::default(),
-            selection: Hsla::default(),
-            caret: Hsla::default(),
+            foreground: unset,
+            muted_foreground: unset,
+            background: unset,
+            border: unset,
+            selection: unset,
+            caret: unset,
             diagnostics: DiagnosticColors::default(),
             highlight_styles: Arc::new(NoHighlightStyles),
             editor_invisible: None,
@@ -176,14 +177,14 @@ mod tests {
             resolved.muted_foreground,
             resolved.selection,
         ] {
-            assert!(colour.a > 0., "{colour:?} is still invisible");
+            assert!(colour.alpha > 0., "{colour:?} is still invisible");
         }
     }
 
     #[test]
     fn a_selection_stays_translucent_enough_to_read_through() {
         let resolved = InputEditorStyle::default().resolved(&dark());
-        assert_eq!(resolved.selection.a, 0.4);
+        assert_eq!(resolved.selection.alpha, 0.4);
     }
 
     #[test]

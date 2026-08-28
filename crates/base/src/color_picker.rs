@@ -795,8 +795,11 @@ mod tests {
         assert_eq!(parse_hex("ffffff"), Some(white));
 
         let half = parse_hex("#ff000080").unwrap();
-        assert!((half.a - 0.5).abs() < 0.01);
-        assert_eq!(parse_hex("#f008").map(|c| c.h), Some(half.h));
+        assert!((half.alpha - 0.5).abs() < 0.01);
+        assert_eq!(
+            parse_hex("#f008").map(|c| c.color.hue),
+            Some(half.color.hue)
+        );
     }
 
     #[test]

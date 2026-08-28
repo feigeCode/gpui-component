@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{Focusable as _, Hsla, MouseButton};
+use gpui::{Focusable as _, MouseButton, rgb_to_hsla};
 
 impl BaseShowcase {
     pub(in super::super) fn color_picker(
@@ -15,7 +15,9 @@ impl BaseShowcase {
         let picker = self.color_picker.read(cx);
         let open = picker.is_open();
         let selected = picker.value();
-        let displayed = picker.displayed_color().unwrap_or(rgb(0x171717).into());
+        let displayed = picker
+            .displayed_color()
+            .unwrap_or_else(|| rgb_to_hsla(rgb(0x171717)));
         let hex = picker.hex_input().read(cx).value();
         let focus_handle = picker.focus_handle(cx);
         let hex_input = picker.hex_input().clone();
@@ -52,7 +54,7 @@ impl BaseShowcase {
                 .into_iter()
                 .enumerate()
                 .map(|(index, value)| {
-                    let color: Hsla = rgb(value).into();
+                    let color = rgb_to_hsla(rgb(value));
                     let hover_state = state.clone();
                     let click_state = state.clone();
                     ColorSwatch::new(("swatch", index), color)

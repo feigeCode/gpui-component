@@ -730,14 +730,14 @@ mod tests {
         fixture.render(cx, 1.0);
         let reversed_at = fixture.advance(cx, 100, 1.0);
 
-        // Retarget mid-flight. A duration-based transition restarts its easing
-        // here and moves away from 1.0 on the very next frame.
+        // Retarget mid-flight. The spring remains continuous and has not
+        // reached the new target on the next frame.
         assert_eq!(fixture.render(cx, 0.0), reversed_at);
 
         let next = fixture.advance(cx, 16, 0.0);
         assert!(
-            next > reversed_at,
-            "expected the spring to carry its velocity past {reversed_at}, got {next}"
+            next > 0.0 && next < reversed_at,
+            "expected a continuous turn from {reversed_at} toward zero, got {next}"
         );
 
         assert_eq!(fixture.advance(cx, 1_000, 0.0), 0.0);

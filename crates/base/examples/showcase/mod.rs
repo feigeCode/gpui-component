@@ -4,7 +4,7 @@ mod syntect_highlighter;
 use gpui::{
     App, AppContext as _, Application, Context, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, Window,
-    WindowOptions, actions, div, prelude::FluentBuilder as _, px, rgb, size,
+    WindowOptions, actions, div, prelude::FluentBuilder as _, px, rgb, rgb_to_hsla, size,
 };
 #[cfg(not(target_family = "wasm"))]
 use gpui::{KeyBinding, WindowBounds};
@@ -172,10 +172,10 @@ impl BaseShowcase {
                     "Hello GPUI"
                 });
             state.set_editor_style(InputEditorStyle {
-                foreground: rgb(0x171717).into(),
-                muted_foreground: rgb(0x737373).into(),
+                foreground: rgb_to_hsla(rgb(0x171717)),
+                muted_foreground: rgb_to_hsla(rgb(0x737373)),
                 selection: gpui::hsla(0.6, 0.8, 0.7, 0.45),
-                caret: rgb(0x171717).into(),
+                caret: rgb_to_hsla(rgb(0x171717)),
                 ..InputEditorStyle::default()
             });
             state
@@ -189,10 +189,10 @@ impl BaseShowcase {
         let textarea_base = textarea.clone();
         textarea_base.update(cx, |state, _| {
             state.set_editor_style(InputEditorStyle {
-                foreground: rgb(0x171717).into(),
-                muted_foreground: rgb(0x737373).into(),
+                foreground: rgb_to_hsla(rgb(0x171717)),
+                muted_foreground: rgb_to_hsla(rgb(0x737373)),
                 selection: gpui::hsla(0.6, 0.8, 0.7, 0.45),
-                caret: rgb(0x171717).into(),
+                caret: rgb_to_hsla(rgb(0x171717)),
                 ..InputEditorStyle::default()
             });
         });
@@ -214,10 +214,10 @@ impl BaseShowcase {
                 cx,
             );
             state.set_editor_style(InputEditorStyle {
-                foreground: rgb(0x171717).into(),
-                muted_foreground: rgb(0x737373).into(),
+                foreground: rgb_to_hsla(rgb(0x171717)),
+                muted_foreground: rgb_to_hsla(rgb(0x737373)),
                 selection: gpui::hsla(0.6, 0.8, 0.7, 0.45),
-                caret: rgb(0x171717).into(),
+                caret: rgb_to_hsla(rgb(0x171717)),
                 highlight_styles: Arc::new(ShowcaseHighlightStyles),
                 ..InputEditorStyle::default()
             });
@@ -225,10 +225,10 @@ impl BaseShowcase {
         let combobox_query = cx.new(|cx| {
             let mut state = InputState::new(window, cx).placeholder("Search frameworks…");
             state.set_editor_style(InputEditorStyle {
-                foreground: rgb(0x171717).into(),
-                muted_foreground: rgb(0x737373).into(),
+                foreground: rgb_to_hsla(rgb(0x171717)),
+                muted_foreground: rgb_to_hsla(rgb(0x737373)),
                 selection: gpui::hsla(0.6, 0.8, 0.7, 0.45),
-                caret: rgb(0x171717).into(),
+                caret: rgb_to_hsla(rgb(0x171717)),
                 ..InputEditorStyle::default()
             });
             state
@@ -252,7 +252,7 @@ impl BaseShowcase {
         cx.observe(&slider, |_, _, cx| cx.notify()).detach();
 
         let color_picker =
-            cx.new(|cx| ColorPickerState::new(window, cx).default_value(rgb(0x2563eb)));
+            cx.new(|cx| ColorPickerState::new(window, cx).default_value(rgb_to_hsla(rgb(0x2563eb))));
         cx.observe(&color_picker, |_, _, cx| cx.notify()).detach();
 
         let text_selection_handles = [
