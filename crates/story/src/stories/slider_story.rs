@@ -327,7 +327,10 @@ impl Render for SliderStory {
                                 v_flex()
                                     .items_center()
                                     .child("Hue")
-                                    .child(format!("{:.0}", self.slider_hsl_value.h * 360.)),
+                                    .child(format!(
+                                        "{:.0}",
+                                        self.slider_hsl_value.color.hue.into_degrees()
+                                    )),
                             ),
                     )
                     .child(
@@ -345,7 +348,10 @@ impl Render for SliderStory {
                                 v_flex()
                                     .items_center()
                                     .child("Saturation")
-                                    .child(format!("{:.0}", self.slider_hsl_value.s * 100.)),
+                                    .child(format!(
+                                        "{:.0}",
+                                        self.slider_hsl_value.color.saturation * 100.
+                                    )),
                             ),
                     )
                     .child(
@@ -363,7 +369,10 @@ impl Render for SliderStory {
                                 v_flex()
                                     .items_center()
                                     .child("Lightness")
-                                    .child(format!("{:.0}", self.slider_hsl_value.l * 100.)),
+                                    .child(format!(
+                                        "{:.0}",
+                                        self.slider_hsl_value.color.lightness * 100.
+                                    )),
                             ),
                     )
                     .child(
@@ -381,7 +390,7 @@ impl Render for SliderStory {
                                 v_flex()
                                     .items_center()
                                     .child("Alpha")
-                                    .child(format!("{:.0}", self.slider_hsl_value.a * 100.)),
+                                    .child(format!("{:.0}", self.slider_hsl_value.alpha * 100.)),
                             ),
                     ),
             )

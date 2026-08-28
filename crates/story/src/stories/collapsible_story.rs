@@ -17,6 +17,7 @@ use gpui_component::{
     tag::Tag,
     v_flex,
 };
+use gpui_component::Colorize as _;
 
 use crate::section;
 

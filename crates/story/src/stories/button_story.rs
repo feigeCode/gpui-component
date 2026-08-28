@@ -10,6 +10,7 @@ use gpui_component::{
     progress::ProgressCircle,
     v_flex,
 };
+use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use crate::{ChangeStorySize, section, story_toolbar};

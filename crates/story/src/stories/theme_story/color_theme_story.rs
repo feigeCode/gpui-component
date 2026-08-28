@@ -648,31 +648,34 @@ fn format_colors(
 }
 
 fn hsla_to_hex(color: Hsla) -> String {
-    let rgb = color.to_rgb();
-    if color.a < 1.0 {
+    let rgb = gpui::hsla_to_rgba(color);
+    if color.alpha < 1.0 {
         format!(
             "{:02x}{:02x}{:02x}{:02x}",
-            (rgb.r * 255.0) as u8,
-            (rgb.g * 255.0) as u8,
-            (rgb.b * 255.0) as u8,
-            (color.a * 255.0) as u8
+            (rgb.color.red * 255.0) as u8,
+            (rgb.color.green * 255.0) as u8,
+            (rgb.color.blue * 255.0) as u8,
+            (color.alpha * 255.0) as u8
         )
     } else {
         format!(
             "{:02x}{:02x}{:02x}",
-            (rgb.r * 255.0) as u8,
-            (rgb.g * 255.0) as u8,
-            (rgb.b * 255.0) as u8
+            (rgb.color.red * 255.0) as u8,
+            (rgb.color.green * 255.0) as u8,
+            (rgb.color.blue * 255.0) as u8
         )
     }
 }
 
 /// Compares two HSLA colors for equality at 8-bit precision.
 fn colors_equal_u8(c1: Hsla, c2: Hsla) -> bool {
-    let rgb1 = c1.to_rgb();
-    let rgb2 = c2.to_rgb();
+    let rgb1 = gpui::hsla_to_rgba(c1);
+    let rgb2 = gpui::hsla_to_rgba(c2);
     let eq = |a: f32, b: f32| (a * 255.0).round() as u8 == (b * 255.0).round() as u8;
-    eq(rgb1.r, rgb2.r) && eq(rgb1.g, rgb2.g) && eq(rgb1.b, rgb2.b) && eq(c1.a, c2.a)
+    eq(rgb1.color.red, rgb2.color.red)
+        && eq(rgb1.color.green, rgb2.color.green)
+        && eq(rgb1.color.blue, rgb2.color.blue)
+        && eq(c1.alpha, c2.alpha)
 }
 
 /// Filters categories by a predicate on color entries, removing empty categories.

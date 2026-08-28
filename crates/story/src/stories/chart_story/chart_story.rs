@@ -1,6 +1,6 @@
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, FontWeight, Hsla, IntoElement,
-    ParentElement, Render, Rgba, SharedString, Styled, Window, div, linear_color_stop,
+    ParentElement, Render, SharedString, Styled, Window, div, linear_color_stop,
     linear_gradient, prelude::FluentBuilder, px,
 };
 use gpui_component::{
@@ -15,6 +15,7 @@ use gpui_component::{
     separator::Separator,
     v_flex,
 };
+use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use super::StackedBarChart;
@@ -29,7 +30,9 @@ struct MonthlyDevice {
 
 impl MonthlyDevice {
     pub fn color(&self, color: Hsla) -> Hsla {
-        color.alpha(self.color_alpha)
+        let mut color = color;
+        color.alpha = self.color_alpha;
+        color
     }
 }
 
@@ -147,8 +150,7 @@ impl ChartStory {
                         name: node.name.clone(),
                         value: node.value.parse().unwrap_or(0.),
                         growth: node.growth.parse().ok(),
-                        color: Rgba::try_from(node.color.as_ref())
-                            .map(Into::into)
+                        color: Hsla::parse_hex(node.color.as_ref())
                             .unwrap_or(gpui::black()),
                     })
                     .collect();
@@ -682,11 +684,19 @@ impl Render for ChartStory {
                                         |x: f32, y: f32| -> f32 { (x * w + (h - y) * h) / denom };
                                     let lo = project(bar.origin.x, bar.origin.y + bar.size.height);
                                     let hi = project(bar.origin.x + bar.size.width, bar.origin.y);
-                                    let lerp = |t: f32| Hsla {
-                                        h: c1.h + (c2.h - c1.h) * t,
-                                        s: c1.s + (c2.s - c1.s) * t,
-                                        l: c1.l + (c2.l - c1.l) * t,
-                                        a: c1.a + (c2.a - c1.a) * t,
+                                    let lerp = |t: f32| {
+                                        gpui::hsla(
+                                            (c1.color.hue.into_degrees()
+                                                + (c2.color.hue.into_degrees()
+                                                    - c1.color.hue.into_degrees())
+                                                    * t)
+                                                / 360.,
+                                            c1.color.saturation
+                                                + (c2.color.saturation - c1.color.saturation) * t,
+                                            c1.color.lightness
+                                                + (c2.color.lightness - c1.color.lightness) * t,
+                                            c1.alpha + (c2.alpha - c1.alpha) * t,
+                                        )
                                     };
                                     linear_gradient(
                                         45.,

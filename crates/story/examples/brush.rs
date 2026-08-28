@@ -72,7 +72,7 @@ impl BrushStory {
             self.is_drawing = true;
             let brush_size = self.brush_size.read(cx).value().start();
             let brush_opacity = self.brush_opacity.read(cx).value().start();
-            let color = self.brush_color.opacity(brush_opacity);
+            let color = gpui_component::Colorize::opacity(&self.brush_color, brush_opacity);
 
             let local_pos = if let Some(bounds) = self.canvas_bounds {
                 Point::new(
@@ -237,7 +237,7 @@ impl BrushStory {
                     let size = prepaint_bounds.size;
 
                     if show_grid {
-                        let grid_color = theme.border.opacity(0.2);
+                        let grid_color = gpui_component::Colorize::opacity(&theme.border, 0.2);
                         let grid_size = 40.0;
 
                         let mut x = 0.0;

@@ -13,6 +13,7 @@ use gpui_component::{
     tag::Tag,
     v_flex,
 };
+use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use crate::{ChangeStorySize, section, story_toolbar};

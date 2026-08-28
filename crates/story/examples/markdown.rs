@@ -1017,16 +1017,16 @@ fn script_char(ch: char, superscript: bool) -> char {
 }
 
 fn svg_color(color: Hsla) -> (String, f32) {
-    let rgba: Rgba = color.into();
+    let rgba = gpui::hsla_to_rgba(color);
     let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
     (
         format!(
             "#{:02x}{:02x}{:02x}",
-            channel(rgba.r),
-            channel(rgba.g),
-            channel(rgba.b)
+            channel(rgba.color.red),
+            channel(rgba.color.green),
+            channel(rgba.color.blue)
         ),
-        rgba.a.clamp(0.0, 1.0),
+        rgba.alpha.clamp(0.0, 1.0),
     )
 }
 

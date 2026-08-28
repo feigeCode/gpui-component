@@ -9,6 +9,7 @@ use gpui_component::{
     progress::{Progress, ProgressCircle},
     v_flex,
 };
+use gpui_component::Colorize as _;
 use serde::Deserialize;
 use std::time::Duration;
 
