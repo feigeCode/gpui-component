@@ -1,5 +1,5 @@
 use gpui::{Context, Pixels, Task, px};
-use instant::Duration;
+use web_time::Duration;
 
 static INTERVAL: Duration = Duration::from_millis(500);
 static PAUSE_DELAY: Duration = Duration::from_millis(300);

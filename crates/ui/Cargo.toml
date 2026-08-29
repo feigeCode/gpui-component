@@ -119,7 +119,7 @@ palette.workspace = true
 enum-iterator = "2.1.0"
 itertools = "0.13.0"
 once_cell = "1.19.0"
-paste = "1"
+paste = { package = "pastey", version = "0.2.3" }
 uuid = "1.10"
 
 # Async primitives (cross-platform, including WASM)
@@ -142,7 +142,7 @@ chrono = "0.4.38"
 lsp-types.workspace = true
 
 # Cross-platform time APIs (zero-cost on native, uses web APIs on WASM)
-instant.workspace = true
+web-time.workspace = true
 
 # Native-only dependencies (not available on WASM)
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
@@ -206,7 +206,7 @@ objc2-foundation = { version = "0.3", features = [
 [target.'cfg(target_os = "windows")'.dependencies]
 # Native menu (NativeMenu) — drives Win32 popup menus.
 raw-window-handle = { workspace = true }
-resvg = "0.45.1"
+resvg = "0.48.1"
 windows = { workspace = true, features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",

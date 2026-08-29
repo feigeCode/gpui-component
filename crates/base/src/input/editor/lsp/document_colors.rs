@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gpui::{App, Context, Hsla, Task, Window};
-use instant::Duration;
+use web_time::Duration;
 use lsp_types::ColorInformation;
 use palette::IntoColor as _;
 use ropey::Rope;

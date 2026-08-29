@@ -1,4 +1,4 @@
-use instant::{Duration, Instant};
+use web_time::{Duration, Instant};
 use std::fmt::Debug;
 
 /// A HistoryItem represents a single change in the history.

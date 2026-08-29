@@ -6,7 +6,7 @@ use gpui::{
 };
 use gpui_base::HoverCard as BaseHoverCard;
 pub use gpui_base::HoverCardState;
-use instant::Duration;
+use web_time::Duration;
 
 use crate::{StyledExt as _, popover::Popover};
 

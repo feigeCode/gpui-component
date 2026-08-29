@@ -238,7 +238,7 @@ pub(crate) struct Metrics {
 impl Metrics {
     /// Times `build`, which is one entry into script `render`.
     pub fn time_script_render<R>(&self, build: impl FnOnce() -> R) -> R {
-        let started = instant::Instant::now();
+        let started = web_time::Instant::now();
         let result = build();
         let elapsed = elapsed_nanos(started);
 
@@ -258,7 +258,7 @@ impl Metrics {
     ///
     /// [`time_script_render`]: Self::time_script_render
     pub fn time_native<R>(&self, call: impl FnOnce() -> R) -> R {
-        let started = instant::Instant::now();
+        let started = web_time::Instant::now();
         let result = call();
         self.native_nanos
             .set(self.native_nanos.get() + elapsed_nanos(started));
@@ -277,7 +277,7 @@ impl Metrics {
     /// total answers. See [`Self::time_materialize`] and the note in this
     /// module's comment.
     pub fn time_frame_script<R>(&self, build: impl FnOnce() -> R) -> R {
-        let started = instant::Instant::now();
+        let started = web_time::Instant::now();
         let result = build();
         self.frame_script_calls
             .set(self.frame_script_calls.get() + 1);
@@ -288,7 +288,7 @@ impl Metrics {
 
     /// Times `build`, which is one materialization of a snapshot.
     pub fn time_materialize<R>(&self, build: impl FnOnce() -> R) -> R {
-        let started = instant::Instant::now();
+        let started = web_time::Instant::now();
         let result = build();
         self.materializations.set(self.materializations.get() + 1);
         self.materialize_nanos
@@ -325,6 +325,6 @@ impl Metrics {
     }
 }
 
-fn elapsed_nanos(started: instant::Instant) -> u64 {
+fn elapsed_nanos(started: web_time::Instant) -> u64 {
     u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }

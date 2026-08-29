@@ -5,7 +5,7 @@ use gpui::{
     ParentElement as _, Render, RenderOnce, Stateful, StatefulInteractiveElement as _, Task,
     Window, div, prelude::FluentBuilder as _,
 };
-use instant::Duration;
+use web_time::Duration;
 
 use crate::Popup;
 

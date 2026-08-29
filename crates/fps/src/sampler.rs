@@ -4,7 +4,7 @@ use gpui::{
     WindowId,
     profiler::{FrameTiming, FrameTimingCollector},
 };
-use instant::Instant;
+use web_time::Instant;
 
 /// Frames older than this stop contributing to the FPS readout.
 const FPS_WINDOW: Duration = Duration::from_secs(1);

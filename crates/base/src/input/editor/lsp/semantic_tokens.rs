@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use anyhow::Result;
 use gpui::{App, Context, HighlightStyle, SharedString, Task, Window};
-use instant::Duration;
+use web_time::Duration;
 use lsp_types::{Position, SemanticTokens, SemanticTokensLegend};
 use ropey::Rope;
 

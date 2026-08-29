@@ -3,7 +3,7 @@ use gpui::{
     Animation, AnimationExt as _, App, Hsla, IntoElement, ParentElement, RenderOnce, Styled as _,
     Transformation, Window, div, ease_in_out, percentage, prelude::FluentBuilder as _,
 };
-use instant::Duration;
+use web_time::Duration;
 
 /// A cycling loading spinner.
 #[derive(IntoElement)]

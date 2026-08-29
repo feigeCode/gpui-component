@@ -1,6 +1,6 @@
 use std::{cell::Cell, ops::Deref, panic::Location, rc::Rc};
 
-use instant::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 use crate::{
     AxisExt,
