@@ -224,7 +224,7 @@ name = "app_assets"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_platform",
  "rust-embed",
@@ -1781,7 +1781,7 @@ name = "dialog_overlay"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -2313,7 +2313,7 @@ name = "focus_trap"
 version = "0.5.0"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_platform",
 ]
@@ -2424,7 +2424,7 @@ dependencies = [
 name = "fps_monitor"
 version = "0.1.0"
 dependencies = [
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components_fps",
  "gpui_ce_platform",
 ]
@@ -2968,7 +2968,7 @@ version = "0.5.2"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components_base",
  "gpui_ce_platform",
  "log",
@@ -2978,60 +2978,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gpui-component-story"
-version = "0.5.1"
-dependencies = [
- "anyhow",
- "async-channel",
- "autocorrect",
- "chrono",
- "color-lsp",
- "csv",
- "dirs 6.0.0",
- "fake",
- "getrandom 0.2.17",
- "gpui_ce",
- "gpui_ce_components",
- "gpui_ce_components_assets",
- "gpui_ce_components_base",
- "gpui_ce_components_fps",
- "gpui_ce_components_shell",
- "gpui_ce_platform",
- "gpui_ce_web",
- "gtk",
- "itertools 0.14.0",
- "lsp-types 0.97.0",
- "rand 0.8.8",
- "regex",
- "rust-i18n",
- "serde",
- "serde_json",
- "smol",
- "syntect",
- "tracing",
- "tracing-subscriber",
- "tree-sitter-navi",
- "unindent",
-]
-
-[[package]]
-name = "gpui-component-story-web"
-version = "0.5.1"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "gpui-component-story",
- "gpui_ce",
- "gpui_ce_components",
- "gpui_ce_components_assets",
- "gpui_ce_platform",
- "log",
- "tracing-wasm",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "gpui_ce"
+name = "gpui-ce"
 version = "0.2.2"
 dependencies = [
  "accesskit",
@@ -3115,6 +3062,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpui-component-story"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "autocorrect",
+ "chrono",
+ "color-lsp",
+ "csv",
+ "dirs 6.0.0",
+ "fake",
+ "getrandom 0.2.17",
+ "gpui-ce",
+ "gpui_ce_components",
+ "gpui_ce_components_assets",
+ "gpui_ce_components_base",
+ "gpui_ce_components_fps",
+ "gpui_ce_components_shell",
+ "gpui_ce_platform",
+ "gpui_ce_web",
+ "gtk",
+ "itertools 0.14.0",
+ "lsp-types 0.97.0",
+ "rand 0.8.8",
+ "regex",
+ "rust-i18n",
+ "serde",
+ "serde_json",
+ "smol",
+ "syntect",
+ "tracing",
+ "tracing-subscriber",
+ "tree-sitter-navi",
+ "unindent",
+]
+
+[[package]]
+name = "gpui-component-story-web"
+version = "0.5.1"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "gpui-ce",
+ "gpui-component-story",
+ "gpui_ce_components",
+ "gpui_ce_components_assets",
+ "gpui_ce_platform",
+ "log",
+ "tracing-wasm",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "gpui_ce_collections"
 version = "0.2.2"
 dependencies = [
@@ -3132,7 +3132,7 @@ dependencies = [
  "core-text",
  "enum-iterator",
  "futures",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components_assets",
  "gpui_ce_components_base",
  "gpui_ce_components_macros",
@@ -3209,7 +3209,7 @@ name = "gpui_ce_components_assets"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "log",
  "rust-embed",
  "wasm-bindgen",
@@ -3225,7 +3225,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "chrono",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_macros",
  "gpui_ce_platform",
  "indoc",
@@ -3254,7 +3254,7 @@ dependencies = [
 name = "gpui_ce_components_fps"
 version = "0.2.0"
 dependencies = [
- "gpui_ce",
+ "gpui-ce",
  "instant",
  "libc",
  "objc2-core-foundation",
@@ -3280,7 +3280,7 @@ dependencies = [
  "async-channel",
  "cap-std",
  "chrono",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components_base",
  "gpui_ce_components_fps",
  "gpui_ce_platform",
@@ -3309,7 +3309,7 @@ name = "gpui_ce_components_webview"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "lb-wry",
 ]
 
@@ -3337,7 +3337,7 @@ dependencies = [
  "calloop-wayland-source",
  "filedescriptor",
  "futures",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_collections",
  "gpui_ce_util",
  "gpui_ce_wgpu",
@@ -3395,7 +3395,7 @@ dependencies = [
  "etagere",
  "foreign-types",
  "futures",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_collections",
  "gpui_ce_media",
  "gpui_ce_util",
@@ -3450,7 +3450,7 @@ name = "gpui_ce_platform"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_linux",
  "gpui_ce_macos",
  "gpui_ce_web",
@@ -3513,7 +3513,7 @@ dependencies = [
  "anyhow",
  "console_error_panic_hook",
  "futures",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_wgpu",
  "http",
  "js-sys",
@@ -3535,7 +3535,7 @@ dependencies = [
  "bytemuck",
  "cosmic-text",
  "etagere",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_collections",
  "gpui_ce_util",
  "itertools 0.14.0",
@@ -3566,7 +3566,7 @@ dependencies = [
  "dunce",
  "etagere",
  "futures",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_collections",
  "gpui_ce_util",
  "image",
@@ -3775,7 +3775,7 @@ name = "hello_world"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_platform",
 ]
@@ -4224,7 +4224,7 @@ name = "input"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -4962,7 +4962,7 @@ dependencies = [
 name = "markdown_table"
 version = "0.5.1"
 dependencies = [
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -7216,7 +7216,7 @@ dependencies = [
 name = "root_borderless"
 version = "0.5.1"
 dependencies = [
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_platform",
 ]
@@ -7911,7 +7911,7 @@ name = "sidebar"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -8487,7 +8487,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "core-foundation 0.10.0",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -8501,7 +8501,7 @@ dependencies = [
 name = "table_in_scrollable"
 version = "0.5.1"
 dependencies = [
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_platform",
 ]
@@ -8596,7 +8596,7 @@ name = "text_max_lines"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -8607,7 +8607,7 @@ name = "text_selection"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -8973,7 +8973,7 @@ name = "tooltip_top_edge"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_platform",
 ]
@@ -10144,7 +10144,7 @@ name = "webview"
 version = "0.5.0"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_webview",
  "gpui_ce_platform",
@@ -10411,7 +10411,7 @@ name = "window_title"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "gpui_ce",
+ "gpui-ce",
  "gpui_ce_components",
  "gpui_ce_components_assets",
  "gpui_ce_platform",
@@ -11787,3 +11787,19 @@ dependencies = [
  "syn 3.0.4",
  "winnow 1.0.4",
 ]
+
+[[patch.unused]]
+name = "gpui_ce_elements"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "gpui_ce_path"
+version = "0.2.2"
+
+[[patch.unused]]
+name = "gpui_ce_tokio"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "gpui_ce_zed_util"
+version = "0.2.2"

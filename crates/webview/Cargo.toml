@@ -1,7 +1,7 @@
 [package]
 name = "gpui_ce_components_webview"
 description = "WebView support for GPUI, based on Wry."
-keywords = ["webview", "gpui","wry"]
+keywords = ["webview", "gpui", "wry"]
 license.workspace = true
 documentation = "https://docs.rs/gpui_ce_components_webview"
 homepage.workspace = true

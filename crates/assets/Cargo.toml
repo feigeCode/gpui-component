@@ -33,7 +33,10 @@ gpui.workspace = true
 log.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-rust-embed = { version = "8.7.2", features = ["interpolate-folder-path", "include-exclude"] }
+rust-embed = { version = "8.7.2", features = [
+  "interpolate-folder-path",
+  "include-exclude",
+] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 reqwest = { workspace = true }

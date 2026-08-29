@@ -21,41 +21,41 @@ tree-sitter = ["dep:tree-sitter", "dep:tree-sitter-json"]
 
 # For syntax highlighting in Markdown and CodeEditor.
 tree-sitter-languages = [
-    "tree-sitter-astro",
-    "tree-sitter-bash",
-    "tree-sitter-c",
-    "tree-sitter-cmake",
-    "tree-sitter-cpp",
-    "tree-sitter-csharp",
-    "tree-sitter-css",
-    "tree-sitter-diff",
-    "tree-sitter-ejs",
-    "tree-sitter-elixir",
-    "tree-sitter-erb",
-    "tree-sitter-go",
-    "tree-sitter-graphql",
-    "tree-sitter-html",
-    "tree-sitter-java",
-    "tree-sitter-javascript",
-    "tree-sitter-jsdoc",
-    "tree-sitter-kotlin",
-    "tree-sitter-lua",
-    "tree-sitter-make",
-    "tree-sitter-markdown",
-    "tree-sitter-php",
-    "tree-sitter-proto",
-    "tree-sitter-python",
-    "tree-sitter-ruby",
-    "tree-sitter-rust",
-    "tree-sitter-scala",
-    "tree-sitter-sql",
-    "tree-sitter-svelte",
-    "tree-sitter-swift",
-    "tree-sitter-toml",
-    "tree-sitter-tsx",
-    "tree-sitter-typescript",
-    "tree-sitter-yaml",
-    "tree-sitter-zig",
+  "tree-sitter-astro",
+  "tree-sitter-bash",
+  "tree-sitter-c",
+  "tree-sitter-cmake",
+  "tree-sitter-cpp",
+  "tree-sitter-csharp",
+  "tree-sitter-css",
+  "tree-sitter-diff",
+  "tree-sitter-ejs",
+  "tree-sitter-elixir",
+  "tree-sitter-erb",
+  "tree-sitter-go",
+  "tree-sitter-graphql",
+  "tree-sitter-html",
+  "tree-sitter-java",
+  "tree-sitter-javascript",
+  "tree-sitter-jsdoc",
+  "tree-sitter-kotlin",
+  "tree-sitter-lua",
+  "tree-sitter-make",
+  "tree-sitter-markdown",
+  "tree-sitter-php",
+  "tree-sitter-proto",
+  "tree-sitter-python",
+  "tree-sitter-ruby",
+  "tree-sitter-rust",
+  "tree-sitter-scala",
+  "tree-sitter-sql",
+  "tree-sitter-svelte",
+  "tree-sitter-swift",
+  "tree-sitter-toml",
+  "tree-sitter-tsx",
+  "tree-sitter-typescript",
+  "tree-sitter-yaml",
+  "tree-sitter-zig",
 ]
 tree-sitter-astro = ["tree-sitter", "dep:tree-sitter-astro-next"]
 tree-sitter-bash = ["tree-sitter", "dep:tree-sitter-bash"]
@@ -148,7 +148,7 @@ instant.workspace = true
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 smol.workspace = true
 tree-sitter = { version = "0.26", optional = true }
-tree-sitter-astro-next = { version="0.1.1", optional = true }
+tree-sitter-astro-next = { version = "0.1.1", optional = true }
 tree-sitter-bash = { version = "0.23.3", optional = true }
 tree-sitter-c = { version = "0.24.1", optional = true }
 tree-sitter-c-sharp = { version = "0.23.1", optional = true }
@@ -189,30 +189,34 @@ core-text = "=21.0.0"
 raw-window-handle = { workspace = true }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = [
-    "NSMenu",
-    "NSMenuItem",
-    "NSView",
-    "NSWindow",
-    "NSResponder",
-    "NSEvent",
-    "NSImage",
+  "NSMenu",
+  "NSMenuItem",
+  "NSView",
+  "NSWindow",
+  "NSResponder",
+  "NSEvent",
+  "NSImage",
 ] }
-objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSGeometry"] }
+objc2-foundation = { version = "0.3", features = [
+  "NSData",
+  "NSString",
+  "NSGeometry",
+] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Native menu (NativeMenu) — drives Win32 popup menus.
 raw-window-handle = { workspace = true }
 resvg = "0.45.1"
 windows = { workspace = true, features = [
-    "Win32_Foundation",
-    "Win32_Graphics_Gdi",
-    "Win32_Graphics_GdiPlus",
-    "Win32_System_Com",
-    "Win32_System_Com_StructuredStorage",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Memory",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_WindowsAndMessaging",
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_GdiPlus",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
 ] }
 
 [dev-dependencies]

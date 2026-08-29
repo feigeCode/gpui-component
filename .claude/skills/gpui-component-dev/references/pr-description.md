@@ -11,7 +11,7 @@ We can get the changes from the PR diff and summarize them in a clear and concis
 
 ### Format
 
-We pefer the following format for breaking changes descriptions:
+We prefer the following format for breaking changes descriptions:
 
 1. Use bullet list for each breaking change item.
 2. Each item should have title and a code block showing the old and new usage by use `diff`.

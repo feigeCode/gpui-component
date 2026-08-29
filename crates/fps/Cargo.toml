@@ -32,22 +32,22 @@ sysinfo = "0.37"
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
 objc2-core-foundation = { version = "0.3", default-features = false, features = [
-    "std",
-    "CFArray",
-    "CFDictionary",
-    "CFNumber",
-    "CFString",
+  "std",
+  "CFArray",
+  "CFDictionary",
+  "CFNumber",
+  "CFString",
 ] }
 objc2-io-kit = { version = "0.3", default-features = false, features = [
-    "std",
-    "libc",
+  "std",
+  "libc",
 ] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { workspace = true, features = [
-    "Win32_System_Performance",
-    "Win32_System_ProcessStatus",
-    "Win32_System_Threading",
+  "Win32_System_Performance",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading",
 ] }
 
 [dev-dependencies]
