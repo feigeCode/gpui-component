@@ -11787,19 +11787,3 @@ dependencies = [
  "syn 3.0.4",
  "winnow 1.0.4",
 ]
-
-[[patch.unused]]
-name = "gpui_ce_elements"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "gpui_ce_path"
-version = "0.2.2"
-
-[[patch.unused]]
-name = "gpui_ce_tokio"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "gpui_ce_zed_util"
-version = "0.2.2"

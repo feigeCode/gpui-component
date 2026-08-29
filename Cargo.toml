@@ -132,7 +132,7 @@ rustybuzz = { opt-level = 3 }
 taffy = { opt-level = 3 }
 ttf-parser = { opt-level = 3 }
 smol = { opt-level = 3 }
-gpui_ce = { opt-level = 3 }
+gpui-ce = { opt-level = 3 }
 gpui_ce_platform = { opt-level = 3 }
 gpui_ce_macros = { opt-level = 3 }
 tree-sitter = { opt-level = 3 }
