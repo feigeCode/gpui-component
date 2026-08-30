@@ -187,12 +187,7 @@ impl HostModuleLoader {
 }
 
 impl Resolver for HostModuleLoader {
-    fn resolve<'js>(
-        &mut self,
-        _ctx: &Ctx<'js>,
-        base: &str,
-        name: &str,
-    ) -> JsResult<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> JsResult<String> {
         // Only a bare specifier: a relative or rooted path is the application's
         // own file, and answering for one here would let a registered module
         // stand in for a file the author is looking straight at.
@@ -210,11 +205,7 @@ impl Resolver for HostModuleLoader {
 }
 
 impl Loader for HostModuleLoader {
-    fn load<'js>(
-        &mut self,
-        ctx: &Ctx<'js>,
-        name: &str,
-    ) -> JsResult<Module<'js, Declared>> {
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> JsResult<Module<'js, Declared>> {
         let Some((module, generation)) = Self::untag(name) else {
             // Not a name this resolver produced, so it belongs to a loader
             // further along the chain.

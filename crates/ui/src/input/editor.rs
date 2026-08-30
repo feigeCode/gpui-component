@@ -1,12 +1,14 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, DefiniteLength, Entity, IntoElement, RenderOnce, SharedString, StyleRefinement, Styled,
-    Window, prelude::FluentBuilder as _, relative,
+    App, DefiniteLength, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    RenderOnce, SharedString, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _,
+    relative,
 };
 
 use super::{EditorState, Input};
 use crate::native_menu::NativeMenu;
+use crate::tooltip::{ManagedTooltipExt as _, Tooltip};
 use crate::{ActiveTheme as _, RoleOverride, StyledExt as _};
 
 /// A code editor takes its rows from the font, so that a smaller or larger
@@ -31,6 +33,7 @@ pub struct Editor {
     ///
     /// If set, this overrides the built-in context menu.
     context_menu_builder: Option<Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu>>,
+    gutter_marker_renderer: Option<gpui_base::input::GutterMarkerRenderer>,
 }
 
 impl Editor {
@@ -47,6 +50,23 @@ impl Editor {
             role: RoleOverride::default(),
             aria_label: None,
             context_menu_builder: None,
+            gutter_marker_renderer: Some(Rc::new(|marker| {
+                div()
+                    .id(marker.id().clone())
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_xs()
+                    .when(!marker.is_enabled(), |this| this.opacity(0.5))
+                    .child(marker.icon().clone())
+                    .when_some(marker.tooltip().cloned(), |this, tooltip| {
+                        this.managed_tooltip(move |window, cx| {
+                            Tooltip::new(tooltip.clone()).build(window, cx)
+                        })
+                    })
+                    .into_any_element()
+            })),
         }
     }
 
@@ -106,6 +126,15 @@ impl Editor {
         self.context_menu_builder = Some(Rc::new(f));
         self
     }
+
+    /// Render application-defined gutter marker icon tokens.
+    pub fn gutter_marker_renderer(
+        mut self,
+        renderer: impl Fn(&gpui_base::input::GutterMarker) -> gpui::AnyElement + 'static,
+    ) -> Self {
+        self.gutter_marker_renderer = Some(Rc::new(renderer));
+        self
+    }
 }
 
 impl Styled for Editor {
@@ -116,6 +145,11 @@ impl Styled for Editor {
 
 impl RenderOnce for Editor {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        if let Some(renderer) = self.gutter_marker_renderer.clone() {
+            self.state.update(cx, |state, _| {
+                state.project_gutter_marker_renderer(renderer);
+            });
+        }
         Input::from_state(self.state.clone())
             // Source code wants a monospace font at a code size, and rows that
             // follow that size. These come first so that a text style set on
@@ -145,8 +179,7 @@ mod tests {
     use super::*;
     use crate::input::EditorState;
     use gpui::{
-        AppContext as _, Context, ParentElement as _, Pixels, Render, TestAppContext,
-        VisualTestContext, div, px,
+        AppContext as _, Context, Pixels, Render, TestAppContext, VisualTestContext, div, px,
     };
 
     struct Harness {

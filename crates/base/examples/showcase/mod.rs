@@ -251,8 +251,8 @@ impl BaseShowcase {
         let slider = cx.new(|_| SliderState::new().min(0.).max(100.).default_value(64.));
         cx.observe(&slider, |_, _, cx| cx.notify()).detach();
 
-        let color_picker =
-            cx.new(|cx| ColorPickerState::new(window, cx).default_value(rgb_to_hsla(rgb(0x2563eb))));
+        let color_picker = cx
+            .new(|cx| ColorPickerState::new(window, cx).default_value(rgb_to_hsla(rgb(0x2563eb))));
         cx.observe(&color_picker, |_, _, cx| cx.notify()).detach();
 
         let text_selection_handles = [

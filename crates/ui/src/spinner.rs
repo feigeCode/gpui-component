@@ -1,7 +1,7 @@
 use crate::{Icon, IconName, Sizable, Size};
 use gpui::{
-    Animation, AnimationExt as _, App, Hsla, IntoElement, ParentElement, RenderOnce, Styled as _,
-    Transformation, Window, div, ease_in_out, percentage, prelude::FluentBuilder as _,
+    Animation, AnimationExt as _, App, Hsla, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled as _, Transformation, Window, div, ease_in_out, percentage, prelude::FluentBuilder as _,
 };
 use web_time::Duration;
 
@@ -13,6 +13,7 @@ pub struct Spinner {
     speed: Duration,
     easing: Box<dyn Fn(f32) -> f32>,
     color: Option<Hsla>,
+    animation_id: SharedString,
 }
 
 impl Spinner {
@@ -24,6 +25,7 @@ impl Spinner {
             easing: Box::new(ease_in_out),
             icon: Icon::new(IconName::Loader),
             color: None,
+            animation_id: "circle".into(),
         }
     }
 
@@ -48,6 +50,12 @@ impl Spinner {
         self.easing = Box::new(easing);
         self
     }
+
+    /// Set an instance-specific animation identifier.
+    pub fn animation_id(mut self, id: impl Into<SharedString>) -> Self {
+        self.animation_id = id.into();
+        self
+    }
 }
 
 impl Sizable for Spinner {
@@ -65,7 +73,7 @@ impl RenderOnce for Spinner {
                     .with_size(self.size)
                     .when_some(self.color, |this, color| this.text_color(color))
                     .with_animation(
-                        "circle",
+                        self.animation_id,
                         Animation::new(self.speed).repeat().with_easing(self.easing),
                         |this, delta| this.transform(Transformation::rotate(percentage(delta))),
                     ),

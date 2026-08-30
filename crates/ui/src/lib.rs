@@ -106,7 +106,7 @@ pub use index_path::IndexPath;
 pub use input::{Rope, RopeExt, RopeLines};
 #[cfg(any(feature = "inspector", debug_assertions))]
 pub use inspector::*;
-pub use root::Root;
+pub use root::{DialogStateChanged, Root};
 pub use styled::*;
 pub use theme::*;
 pub use time::{calendar, date_picker};

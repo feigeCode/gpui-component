@@ -13,7 +13,7 @@ use crate::{
     ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, WindowExt as _,
     animation::cubic_bezier,
     button::{Button, ButtonVariant, ButtonVariants as _},
-    dialog::{DialogContent, DialogTitle},
+    dialog::{DialogContent, DialogFooter, DialogTitle},
     scroll::ScrollableElement as _,
     v_flex,
 };
@@ -245,6 +245,7 @@ pub struct Dialog {
     pub(crate) props: DialogProps,
 
     pub(super) button_props: DialogButtonProps,
+    default_footer: bool,
 
     /// This will be change when open the dialog, the focus handle is create when open the dialog.
     pub(crate) focus_handle: FocusHandle,
@@ -277,6 +278,7 @@ impl Dialog {
             layer_ix: 0,
             selection_scope: TextSelectionScopeId::default(),
             button_props: DialogButtonProps::default(),
+            default_footer: false,
         }
     }
 
@@ -316,12 +318,32 @@ impl Dialog {
     /// When you set the footer, the `button_props` will be ignored, you need to render the action buttons by yourself.
     pub fn footer(mut self, footer: impl IntoElement) -> Self {
         self.footer = Some(footer.into_any_element());
+        self.default_footer = false;
         self
     }
 
     /// Set the button props of the dialog.
     pub fn button_props(mut self, button_props: DialogButtonProps) -> Self {
         self.button_props = button_props;
+        self
+    }
+
+    /// Use the default footer with OK and Cancel buttons.
+    pub fn confirm(mut self) -> Self {
+        self.button_props.show_cancel = true;
+        self.default_footer = true;
+        self
+    }
+
+    /// Use the default footer with an OK button only.
+    pub fn alert(mut self) -> Self {
+        self.button_props.show_cancel = false;
+        self.default_footer = true;
+        self
+    }
+
+    fn with_default_footer(mut self, default_footer: bool) -> Self {
+        self.default_footer = default_footer;
         self
     }
     pub(crate) fn with_base_alert_dialog(mut self, base: gpui_base::AlertDialog) -> Self {
@@ -429,6 +451,17 @@ impl Dialog {
             root.defer_close_dialog(window, cx);
         });
     }
+
+    fn render_default_footer(&self, window: &mut Window, cx: &mut App) -> AnyElement {
+        DialogFooter::new()
+            .children(
+                self.button_props
+                    .show_cancel
+                    .then(|| self.button_props.render_cancel(window, cx)),
+            )
+            .child(self.button_props.render_ok(window, cx))
+            .into_any_element()
+    }
 }
 
 impl ParentElement for Dialog {
@@ -449,6 +482,7 @@ impl Dialog {
         let style = self.style.clone();
         let props = self.props.clone();
         let button_props = self.button_props.clone();
+        let default_footer = self.default_footer;
 
         gpui_base::DialogTrigger::new(trigger)
             .on_open(move |window, cx| {
@@ -460,6 +494,7 @@ impl Dialog {
                     dialog
                         .refine_style(&style)
                         .button_props(button_props.clone())
+                        .with_default_footer(default_footer)
                         .with_props(props.clone())
                         .content({
                             let content_builder = content_builder.clone();
@@ -488,6 +523,10 @@ impl RenderOnce for Dialog {
         let on_close = self.button_props.on_close.clone();
         let on_ok = self.button_props.on_ok.clone();
         let on_cancel = self.button_props.on_cancel.clone();
+        let footer = self.footer.take().or_else(|| {
+            self.default_footer
+                .then(|| self.render_default_footer(window, cx))
+        });
 
         let window_paddings = crate::window_border::window_paddings(window);
         let view_size = window.viewport_size()
@@ -634,7 +673,7 @@ impl RenderOnce for Dialog {
                                                 )
                                             }),
                                     )
-                                    .when_some(self.footer, |this, footer| {
+                                    .when_some(footer, |this, footer| {
                                         this.child(
                                             div()
                                                 .pl(paddings.left)

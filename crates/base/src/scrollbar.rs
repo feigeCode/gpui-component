@@ -54,6 +54,9 @@ pub enum ScrollbarMode {
     Always,
 }
 
+/// Backwards-compatible name for [`ScrollbarMode`].
+pub type ScrollbarShow = ScrollbarMode;
+
 impl ScrollbarMode {
     fn is_hover(&self) -> bool {
         matches!(self, Self::Hover)
@@ -823,6 +826,11 @@ impl Scrollbar {
     pub fn mode(mut self, mode: ScrollbarMode) -> Self {
         self.mode = Some(mode);
         self
+    }
+
+    /// Backwards-compatible alias for [`Self::mode`].
+    pub fn scrollbar_show(self, mode: ScrollbarShow) -> Self {
+        self.mode(mode)
     }
 
     /// Set a special scroll size of the content area, default is None.

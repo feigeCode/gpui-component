@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, ClickEvent, ElementId, InteractiveElement as _, IntoElement, ParentElement, RenderOnce,
-    Role, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _,
+    App, ClickEvent, ElementId, Hsla, InteractiveElement as _, IntoElement, ParentElement,
+    RenderOnce, Role, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window,
+    div, prelude::FluentBuilder as _,
 };
 
 use crate::{ActiveTheme, Icon, IconName, StyledExt, h_flex};
@@ -13,6 +13,8 @@ use crate::{ActiveTheme, Icon, IconName, StyledExt, h_flex};
 pub struct Breadcrumb {
     style: StyleRefinement,
     items: Vec<BreadcrumbItem>,
+    foreground: Option<Hsla>,
+    muted_foreground: Option<Hsla>,
 }
 
 /// Item for the [`Breadcrumb`].
@@ -24,6 +26,8 @@ pub struct BreadcrumbItem {
     on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
     disabled: bool,
     is_last: bool,
+    foreground: Option<Hsla>,
+    muted_foreground: Option<Hsla>,
 }
 
 impl BreadcrumbItem {
@@ -36,6 +40,8 @@ impl BreadcrumbItem {
             on_click: None,
             disabled: false,
             is_last: false,
+            foreground: None,
+            muted_foreground: None,
         }
     }
 
@@ -60,6 +66,12 @@ impl BreadcrumbItem {
     /// For internal use only.
     fn is_last(mut self, is_last: bool) -> Self {
         self.is_last = is_last;
+        self
+    }
+
+    fn colors(mut self, foreground: Option<Hsla>, muted_foreground: Option<Hsla>) -> Self {
+        self.foreground = foreground;
+        self.muted_foreground = muted_foreground;
         self
     }
 }
@@ -98,10 +110,12 @@ impl RenderOnce for BreadcrumbItem {
                 Role::ListItem
             })
             .child(self.label)
-            .text_color(cx.theme().muted_foreground)
-            .when(self.is_last, |this| this.text_color(cx.theme().foreground))
+            .text_color(self.muted_foreground.unwrap_or(cx.theme().muted_foreground))
+            .when(self.is_last, |this| {
+                this.text_color(self.foreground.unwrap_or(cx.theme().foreground))
+            })
             .when(self.disabled, |this| {
-                this.text_color(cx.theme().muted_foreground)
+                this.text_color(self.muted_foreground.unwrap_or(cx.theme().muted_foreground))
             })
             .refine_style(&self.style)
             .when(!self.disabled, |this| {
@@ -120,7 +134,16 @@ impl Breadcrumb {
         Self {
             items: Vec::new(),
             style: StyleRefinement::default(),
+            foreground: None,
+            muted_foreground: None,
         }
+    }
+
+    /// Override breadcrumb colors for an embedded panel with its own palette.
+    pub fn colors(mut self, foreground: Hsla, muted_foreground: Hsla) -> Self {
+        self.foreground = Some(foreground);
+        self.muted_foreground = Some(muted_foreground);
+        self
     }
 
     /// Add an [`BreadcrumbItem`] to the breadcrumb.
@@ -161,7 +184,9 @@ impl RenderOnce for Breadcrumb {
         for (ix, item) in self.items.into_iter().enumerate() {
             let is_last = ix == items_count - 1;
 
-            let item = item.id(ix);
+            let item = item
+                .id(ix)
+                .colors(self.foreground, self.muted_foreground);
             children.push(item.is_last(is_last).into_any_element());
             if !is_last {
                 children.push(BreadcrumbSeparator.into_any_element());
@@ -171,7 +196,7 @@ impl RenderOnce for Breadcrumb {
         h_flex()
             .gap_1p5()
             .text_sm()
-            .text_color(cx.theme().muted_foreground)
+            .text_color(self.muted_foreground.unwrap_or(cx.theme().muted_foreground))
             .refine_style(&self.style)
             .children(children)
     }

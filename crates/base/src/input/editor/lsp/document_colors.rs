@@ -1,10 +1,10 @@
 use anyhow::Result;
 use gpui::{App, Context, Hsla, Task, Window};
-use web_time::Duration;
 use lsp_types::ColorInformation;
 use palette::IntoColor as _;
 use ropey::Rope;
 use std::ops::Range;
+use web_time::Duration;
 
 use crate::input::{EditorMode, InputBaseState, Lsp, RopeExt};
 

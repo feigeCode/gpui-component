@@ -163,6 +163,15 @@ impl DatePickerState {
         self.date
     }
 
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
+    pub fn set_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.open = open;
+        cx.notify();
+    }
+
     /// Set the date of the date picker.
     pub fn set_date(&mut self, date: impl Into<Date>, window: &mut Window, cx: &mut Context<Self>) {
         self.update_date(date.into(), false, window, cx);

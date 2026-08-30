@@ -8,11 +8,31 @@ use lsp_types::{
 };
 use ropey::Rope;
 use std::{cell::RefCell, ops::Range, rc::Rc, time::Duration};
+use sum_tree::Bias;
 
-use crate::input::InputBaseState;
+use crate::input::{InputBaseState, RopeExt as _};
 
 /// Default debounce duration for inline completions.
 const DEFAULT_INLINE_COMPLETION_DEBOUNCE: Duration = Duration::from_millis(300);
+
+fn completion_context_is_current(
+    current_epoch: u64,
+    request_epoch: u64,
+    current_revision: u64,
+    request_revision: u64,
+    current_cursor: usize,
+    request_cursor: usize,
+    current_start: Option<usize>,
+    request_start: usize,
+    current_query: &str,
+    request_query: &str,
+) -> bool {
+    current_epoch == request_epoch
+        && current_revision == request_revision
+        && current_cursor == request_cursor
+        && current_start == Some(request_start)
+        && current_query == request_query
+}
 
 /// Display options for the LSP completion popover.
 ///
@@ -119,10 +139,43 @@ impl Default for InlineCompletion {
 }
 
 impl InputBaseState<EditorMode> {
+    /// Re-run popup completion at the current cursor without changing the document.
+    ///
+    /// This is useful when an asynchronous metadata source becomes ready after
+    /// the original request. Newline, tab, and line-start positions are ignored.
+    pub fn refresh_completion_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.completion_inserting {
+            return;
+        }
+        let cursor = self.cursor();
+        let start = self.text.clip_offset(cursor.saturating_sub(1), Bias::Left);
+        let Some(last_char) = self.text.char_at(start) else {
+            return;
+        };
+        if !(last_char.is_ascii_alphanumeric()
+            || matches!(last_char, '_' | '.' | ' ' | ')' | ']' | '"' | '\''))
+        {
+            return;
+        }
+        let text = self.text.slice(start..cursor).to_string();
+        self.request_completion(&(start..start), &text, true, window, cx);
+    }
+
     pub(crate) fn handle_completion_trigger(
         &mut self,
         range: &Range<usize>,
         new_text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_completion(range, new_text, false, window, cx);
+    }
+
+    fn request_completion(
+        &mut self,
+        range: &Range<usize>,
+        new_text: &str,
+        force: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -141,7 +194,7 @@ impl InputBaseState<EditorMode> {
         let start = range.end;
         let new_offset = self.cursor();
 
-        if !provider.is_completion_trigger(start, new_text, cx) {
+        if !force && !provider.is_completion_trigger(start, new_text, cx) {
             return;
         }
 
@@ -175,10 +228,17 @@ impl InputBaseState<EditorMode> {
             .clone_from(&query);
 
         let completion_context = CompletionContext {
-            trigger_kind: lsp_types::CompletionTriggerKind::TRIGGER_CHARACTER,
+            trigger_kind: if force {
+                lsp_types::CompletionTriggerKind::INVOKED
+            } else {
+                lsp_types::CompletionTriggerKind::TRIGGER_CHARACTER
+            },
             trigger_character: Some(query),
         };
 
+        let request_id = self.next_completion_request_id();
+        let document_revision = self.document_revision();
+        let query = self.extras.context_menu_content.completion.query.clone();
         let provider_responses =
             provider.completions(&self.text, new_offset, completion_context, window, cx);
         self.extras.context_menu_task = cx.spawn_in(window, async move |editor, cx| {
@@ -191,7 +251,17 @@ impl InputBaseState<EditorMode> {
             }
 
             if completions.is_empty() {
-                editor.update(cx, |editor, cx| {
+                editor.update_in(cx, |editor, window, cx| {
+                    if !editor.completion_request_is_current(
+                        request_id,
+                        document_revision,
+                        new_offset,
+                        start_offset,
+                        &query,
+                        window,
+                    ) {
+                        return;
+                    }
                     editor.extras.context_menu_content.completion.open = false;
                     editor.extras.context_menu_content.completion.items.clear();
                     editor.extras.context_menu_content.completion.bump();
@@ -202,7 +272,14 @@ impl InputBaseState<EditorMode> {
 
             editor
                 .update_in(cx, |editor, window, cx| {
-                    if !editor.focus_handle.is_focused(window) {
+                    if !editor.completion_request_is_current(
+                        request_id,
+                        document_revision,
+                        new_offset,
+                        start_offset,
+                        &query,
+                        window,
+                    ) {
                         return;
                     }
 
@@ -221,6 +298,39 @@ impl InputBaseState<EditorMode> {
 
             Ok(())
         });
+    }
+
+    fn next_completion_request_id(&mut self) -> u64 {
+        self.extras.annotations.completion_epoch =
+            self.extras.annotations.completion_epoch.saturating_add(1);
+        self.extras.annotations.completion_epoch
+    }
+
+    fn completion_request_is_current(
+        &self,
+        request_id: u64,
+        document_revision: u64,
+        cursor: usize,
+        start_offset: usize,
+        query: &str,
+        window: &Window,
+    ) -> bool {
+        self.focus_handle.is_focused(window)
+            && completion_context_is_current(
+                self.extras.annotations.completion_epoch,
+                request_id,
+                self.document_revision(),
+                document_revision,
+                self.cursor(),
+                cursor,
+                self.extras
+                    .context_menu_content
+                    .completion
+                    .trigger_start_offset,
+                start_offset,
+                &self.extras.context_menu_content.completion.query,
+                query,
+            )
     }
 
     pub(crate) fn hide_context_menu(&mut self, cx: &mut Context<Self>) {
@@ -283,6 +393,8 @@ impl InputBaseState<EditorMode> {
 
         let offset = self.cursor();
         let text = self.text.clone();
+        let request_id = self.next_completion_request_id();
+        let document_revision = self.document_revision();
         let debounce = provider.inline_completion_debounce();
         let background_executor = cx.background_executor().clone();
 
@@ -293,7 +405,11 @@ impl InputBaseState<EditorMode> {
             // Now fetch the inline completion after the debounce period
             let task = editor.update_in(cx, |editor, window, cx| {
                 // Check if cursor has moved during debounce
-                if editor.cursor() != offset {
+                if editor.extras.annotations.completion_epoch != request_id
+                    || editor.document_revision() != document_revision
+                    || editor.cursor() != offset
+                    || editor.text != text
+                {
                     return None;
                 }
 
@@ -318,7 +434,11 @@ impl InputBaseState<EditorMode> {
 
             editor.update_in(cx, |editor, _window, cx| {
                 // Only apply if cursor still hasn't moved
-                if editor.cursor() != offset {
+                if editor.extras.annotations.completion_epoch != request_id
+                    || editor.document_revision() != document_revision
+                    || editor.cursor() != offset
+                    || editor.text != text
+                {
                     return;
                 }
 
@@ -368,5 +488,24 @@ impl InputBaseState<EditorMode> {
         let completion_text = completion_item.insert_text;
         self.replace_text_in_range_silent(Some(range_utf16), &completion_text, window, cx);
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::completion_context_is_current;
+
+    #[test]
+    fn completion_context_rejects_every_stale_dimension() {
+        let current = |epoch, revision, cursor, start, query: &str| {
+            completion_context_is_current(epoch, 7, revision, 11, cursor, 5, start, 2, query, "abc")
+        };
+
+        assert!(current(7, 11, 5, Some(2), "abc"));
+        assert!(!current(8, 11, 5, Some(2), "abc"));
+        assert!(!current(7, 12, 5, Some(2), "abc"));
+        assert!(!current(7, 11, 6, Some(2), "abc"));
+        assert!(!current(7, 11, 5, Some(1), "abc"));
+        assert!(!current(7, 11, 5, Some(2), "abcd"));
     }
 }

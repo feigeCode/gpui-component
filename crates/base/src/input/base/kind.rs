@@ -21,14 +21,18 @@
 //! reachable.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use gpui::{Div, Entity, Stateful, Window};
+use gpui::{Bounds, Div, Entity, Pixels, SharedString, Stateful, Window};
 use ropey::Rope;
 
-use super::decorations::DecorationCollections;
+use super::decorations::{DecorationCollections, EditorAnnotations};
 use super::lsp::{ContextMenuContent, HoverDefinition, InlineCompletion};
-use crate::input::{HighlightStyleResolver, InputEdit, InputHighlighter, TextDecoration};
+use crate::input::{
+    GutterMarker, HighlightStyleResolver, InlineWidget, InputEdit, InputHighlighter,
+    RangeDecoration, TextDecoration,
+};
 use crate::input::{HoverPopoverState, Lsp};
 use gpui::Task;
 
@@ -113,6 +117,30 @@ pub trait InputExtras: Default + 'static {
     fn context_menu_capabilities(&self) -> (bool, bool) {
         (false, false)
     }
+
+    fn gutter_markers(&self) -> &[GutterMarker] {
+        &[]
+    }
+
+    fn gutter_lane_reserved(&self) -> bool {
+        false
+    }
+
+    fn gutter_marker_renderer(&self) -> Option<crate::input::GutterMarkerRenderer> {
+        None
+    }
+
+    fn gutter_marker_bounds(&self) -> Option<Rc<RefCell<HashMap<SharedString, Bounds<Pixels>>>>> {
+        None
+    }
+
+    fn range_decorations(&self) -> &[RangeDecoration] {
+        &[]
+    }
+
+    fn inline_widgets(&self) -> &[InlineWidget] {
+        &[]
+    }
 }
 
 /// A mode with nothing extra to render.
@@ -192,6 +220,9 @@ pub trait InputModeKind: sealed::Sealed + Sized + 'static {
         _new_len: usize,
     ) {
     }
+
+    /// Records a successful document mutation after validation and normalization.
+    fn document_did_change(_state: &mut InputBaseState<Self>) {}
 
     /// Refreshes language-server state after the text changed.
     fn refresh_language_features(
@@ -331,6 +362,7 @@ pub struct EditorExtras {
     pub(crate) hover_popover: Option<HoverPopoverState>,
     pub(crate) hover_definition: HoverDefinition,
     pub(crate) context_menu_task: Task<anyhow::Result<()>>,
+    pub(crate) annotations: EditorAnnotations,
 }
 
 impl Default for EditorExtras {
@@ -343,6 +375,7 @@ impl Default for EditorExtras {
             hover_popover: None,
             hover_definition: HoverDefinition::default(),
             context_menu_task: Task::ready(Ok(())),
+            annotations: EditorAnnotations::default(),
         }
     }
 }

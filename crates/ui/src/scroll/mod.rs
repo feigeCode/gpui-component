@@ -4,7 +4,7 @@ mod scrollable_mask;
 pub use gpui_base::AutoScroll;
 pub use gpui_base::{
     Scrollbar, ScrollbarAxis, ScrollbarEntrance, ScrollbarHandle, ScrollbarMode, ScrollbarMotion,
-    ScrollbarStyles, ScrollbarThumbStyle, ScrollbarTrackStyle,
+    ScrollbarShow, ScrollbarStyles, ScrollbarThumbStyle, ScrollbarTrackStyle,
 };
 pub use scrollable::*;
 pub(crate) use scrollable_mask::horizontal_scroll_area;

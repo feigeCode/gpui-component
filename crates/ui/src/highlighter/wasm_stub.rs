@@ -403,19 +403,40 @@ impl StatusColors {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HighlightThemeStyle {
-    #[serde(rename = "editor.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_background: Option<gpui::Hsla>,
-    #[serde(rename = "editor.foreground", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.foreground",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_foreground: Option<gpui::Hsla>,
-    #[serde(rename = "editor.active_line.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.active_line.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_active_line: Option<gpui::Hsla>,
-    #[serde(rename = "editor.line_number", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.line_number",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_line_number: Option<gpui::Hsla>,
-    #[serde(rename = "editor.active_line_number", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.active_line_number",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_active_line_number: Option<gpui::Hsla>,
-    #[serde(rename = "editor.invisible", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.invisible",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_invisible: Option<gpui::Hsla>,
-    #[serde(rename = "editor.gutter.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.gutter.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_gutter_background: Option<gpui::Hsla>,
     #[serde(flatten)]
     pub status: StatusColors,

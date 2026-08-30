@@ -323,15 +323,10 @@ impl Render for SliderStory {
                                     .vertical()
                                     .disabled(self.disabled),
                             )
-                            .child(
-                                v_flex()
-                                    .items_center()
-                                    .child("Hue")
-                                    .child(format!(
-                                        "{:.0}",
-                                        self.slider_hsl_value.color.hue.into_degrees()
-                                    )),
-                            ),
+                            .child(v_flex().items_center().child("Hue").child(format!(
+                                "{:.0}",
+                                self.slider_hsl_value.color.hue.into_degrees()
+                            ))),
                     )
                     .child(
                         v_flex()
@@ -344,15 +339,10 @@ impl Render for SliderStory {
                                     .vertical()
                                     .disabled(self.disabled),
                             )
-                            .child(
-                                v_flex()
-                                    .items_center()
-                                    .child("Saturation")
-                                    .child(format!(
-                                        "{:.0}",
-                                        self.slider_hsl_value.color.saturation * 100.
-                                    )),
-                            ),
+                            .child(v_flex().items_center().child("Saturation").child(format!(
+                                "{:.0}",
+                                self.slider_hsl_value.color.saturation * 100.
+                            ))),
                     )
                     .child(
                         v_flex()
@@ -365,15 +355,10 @@ impl Render for SliderStory {
                                     .vertical()
                                     .disabled(self.disabled),
                             )
-                            .child(
-                                v_flex()
-                                    .items_center()
-                                    .child("Lightness")
-                                    .child(format!(
-                                        "{:.0}",
-                                        self.slider_hsl_value.color.lightness * 100.
-                                    )),
-                            ),
+                            .child(v_flex().items_center().child("Lightness").child(format!(
+                                "{:.0}",
+                                self.slider_hsl_value.color.lightness * 100.
+                            ))),
                     )
                     .child(
                         v_flex()

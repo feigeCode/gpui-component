@@ -1,5 +1,5 @@
-use web_time::Duration;
 use std::ops::Range;
+use web_time::Duration;
 
 use crate::actions::{Cancel, Confirm, SelectDown, SelectUp};
 use crate::input::InputState;

@@ -770,7 +770,9 @@ where
     D: Deserializer<'de>,
 {
     Option::<String>::deserialize(deserializer)?.map_or(Ok(None), |value| {
-        try_parse_color(&value).map(Some).map_err(serde::de::Error::custom)
+        try_parse_color(&value)
+            .map(Some)
+            .map_err(serde::de::Error::custom)
     })
 }
 

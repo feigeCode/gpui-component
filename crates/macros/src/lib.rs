@@ -139,7 +139,7 @@ pub fn icon_named(input: TokenStream) -> TokenStream {
         std::path::Path::new(&manifest_dir).join(&raw_path)
     };
 
-    let mut entries: Vec<(String, String)> = Vec::new();
+    let mut entries: Vec<(String, String, bool)> = Vec::new();
 
     let dir = std::fs::read_dir(&icons_dir).unwrap_or_else(|e| {
         panic!(
@@ -155,7 +155,14 @@ pub fn icon_named(input: TokenStream) -> TokenStream {
         if filename.ends_with(".svg") {
             let variant_name = pascal_case(&filename);
             let path = format!("icons/{}", filename);
-            entries.push((variant_name, path));
+            let contents = std::fs::read_to_string(entry.path()).unwrap_or_else(|e| {
+                panic!(
+                    "generate_icon_enum: failed to read '{}': {}",
+                    entry.path().display(),
+                    e
+                )
+            });
+            entries.push((variant_name, path, svg_uses_intrinsic_color(&contents)));
         }
     }
 
@@ -163,9 +170,16 @@ pub fn icon_named(input: TokenStream) -> TokenStream {
 
     let variants: Vec<proc_macro2::Ident> = entries
         .iter()
-        .map(|(name, _)| proc_macro2::Ident::new(name, proc_macro2::Span::call_site()))
+        .map(|(name, _, _)| proc_macro2::Ident::new(name, proc_macro2::Span::call_site()))
         .collect();
-    let paths: Vec<&str> = entries.iter().map(|(_, p)| p.as_str()).collect();
+    let paths: Vec<&str> = entries.iter().map(|(_, p, _)| p.as_str()).collect();
+    let color_modes = entries.iter().map(|(_, _, uses_color)| {
+        if *uses_color {
+            quote! { IconColorMode::Color }
+        } else {
+            quote! { IconColorMode::Mono }
+        }
+    });
 
     // Build derive list: always include IntoElement and Clone, then add custom derives
     let derive_attrs = if let Some((_, custom_derives)) = derives {
@@ -186,6 +200,11 @@ pub fn icon_named(input: TokenStream) -> TokenStream {
             #(#variants,)*
         }
 
+        impl #enum_name {
+            /// All generated icons in stable name order.
+            pub const ALL: &'static [Self] = &[#(Self::#variants,)*];
+        }
+
         impl IconNamed for #enum_name {
             fn path(self) -> SharedString {
                 match self {
@@ -193,10 +212,150 @@ pub fn icon_named(input: TokenStream) -> TokenStream {
                 }
                 .into()
             }
+
+            fn color_mode(&self) -> IconColorMode {
+                match self {
+                    #(Self::#variants => #color_modes,)*
+                }
+            }
         }
     };
 
     TokenStream::from(expanded)
+}
+
+fn svg_uses_intrinsic_color(svg: &str) -> bool {
+    let svg = strip_xml_comments(svg);
+    if css_uses_intrinsic_color(&svg) {
+        return true;
+    }
+    let mut in_tag = false;
+    let mut tag = String::new();
+
+    for character in svg.chars() {
+        match (in_tag, character) {
+            (false, '<') => {
+                in_tag = true;
+                tag.clear();
+            }
+            (true, '>') => {
+                if tag.trim_start().to_ascii_lowercase().starts_with("image") {
+                    return true;
+                }
+                if tag_has_intrinsic_paint(&tag) {
+                    return true;
+                }
+                in_tag = false;
+            }
+            (true, _) => tag.push(character),
+            (false, _) => {}
+        }
+    }
+
+    false
+}
+
+fn css_uses_intrinsic_color(svg: &str) -> bool {
+    let svg = svg.to_ascii_lowercase();
+    for property in ["fill", "stroke", "stop-color"] {
+        let mut remaining = svg.as_str();
+        while let Some(start) = remaining.find(property) {
+            let property_start = &remaining[..start];
+            remaining = &remaining[start + property.len()..];
+            if !property_start
+                .chars()
+                .next_back()
+                .map_or(true, |character| {
+                    character.is_ascii_whitespace() || matches!(character, '{' | ';')
+                })
+            {
+                continue;
+            }
+            let Some(value) = remaining.trim_start().strip_prefix(':') else {
+                continue;
+            };
+            let end = value
+                .find(|character: char| matches!(character, ';' | '}' | '"' | '\''))
+                .unwrap_or(value.len());
+            if is_intrinsic_paint(&value[..end]) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn strip_xml_comments(svg: &str) -> String {
+    let mut result = String::with_capacity(svg.len());
+    let mut remaining = svg;
+    while let Some(start) = remaining.find("<!--") {
+        result.push_str(&remaining[..start]);
+        let Some(end) = remaining[start + 4..].find("-->") else {
+            return result;
+        };
+        remaining = &remaining[start + 4 + end + 3..];
+    }
+    result.push_str(remaining);
+    result
+}
+
+fn tag_has_intrinsic_paint(tag: &str) -> bool {
+    let tag = tag.to_ascii_lowercase();
+    for attribute in ["fill", "stroke", "stop-color", "style"] {
+        let mut remaining = tag.as_str();
+        while let Some(start) = remaining.find(attribute) {
+            let attribute_start = &remaining[..start];
+            remaining = &remaining[start + attribute.len()..];
+            if !attribute_start
+                .chars()
+                .next_back()
+                .map_or(true, |character| character.is_ascii_whitespace())
+            {
+                continue;
+            }
+            let after_attribute = remaining.trim_start();
+            let Some(value) = after_attribute.strip_prefix('=') else {
+                continue;
+            };
+            let value = value.trim_start();
+            let Some(quote) = value.chars().next() else {
+                break;
+            };
+            if quote != '\'' && quote != '"' {
+                continue;
+            }
+            let value = &value[quote.len_utf8()..];
+            let Some(end) = value.find(quote) else { break };
+            let value = &value[..end];
+            if attribute == "style" {
+                if value.split(';').any(|declaration| {
+                    declaration
+                        .split_once(':')
+                        .is_some_and(|(property, value)| {
+                            matches!(
+                                property.trim(),
+                                "fill" | "stroke" | "stop-color" | "flood-color"
+                            )
+                                && is_intrinsic_paint(value)
+                        })
+                }) {
+                    return true;
+                }
+            } else if is_intrinsic_paint(value) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn is_intrinsic_paint(value: &str) -> bool {
+    !matches!(
+        value.trim(),
+        "none" | "currentcolor" | "inherit" | "context-fill" | "context-stroke"
+    )
 }
 
 #[cfg(test)]
@@ -235,5 +394,31 @@ mod tests {
         assert_eq!(pascal_case("WORLD.svg"), "World");
         assert_eq!(pascal_case("iOS-icon.svg"), "IosIcon");
         assert_eq!(pascal_case("API-key.svg"), "ApiKey");
+    }
+
+    #[test]
+    fn classifies_intrinsic_color_paint_without_filename_convention() {
+        assert!(svg_uses_intrinsic_color(
+            r##"<svg><path fill="#10b981"/><path stroke="white"/></svg>"##
+        ));
+        assert!(svg_uses_intrinsic_color(
+            r##"<svg><image href="logo.png"/></svg>"##
+        ));
+        assert!(svg_uses_intrinsic_color(
+            r##"<svg><style>.brand { fill: #10b981; }</style><path class="brand"/></svg>"##
+        ));
+        assert!(svg_uses_intrinsic_color(
+            r##"<svg><stop style="stop-color:#10b981"/></svg>"##
+        ));
+    }
+
+    #[test]
+    fn classifies_current_color_line_icons_as_monochrome() {
+        assert!(!svg_uses_intrinsic_color(
+            r#"<svg fill="none" stroke="currentColor"><path/><path fill="none"/></svg>"#
+        ));
+        assert!(!svg_uses_intrinsic_color(
+            r##"<!-- fill="#fff" --><svg><path style="fill: none; stroke: currentColor"/></svg>"##
+        ));
     }
 }

@@ -1,8 +1,9 @@
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, FontWeight, Hsla, IntoElement,
-    ParentElement, Render, SharedString, Styled, Window, div, linear_color_stop,
-    linear_gradient, prelude::FluentBuilder, px,
+    ParentElement, Render, SharedString, Styled, Window, div, linear_color_stop, linear_gradient,
+    prelude::FluentBuilder, px,
 };
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, StyledExt,
     chart::{
@@ -15,7 +16,6 @@ use gpui_component::{
     separator::Separator,
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use super::StackedBarChart;
@@ -150,8 +150,7 @@ impl ChartStory {
                         name: node.name.clone(),
                         value: node.value.parse().unwrap_or(0.),
                         growth: node.growth.parse().ok(),
-                        color: Hsla::parse_hex(node.color.as_ref())
-                            .unwrap_or(gpui::black()),
+                        color: Hsla::parse_hex(node.color.as_ref()).unwrap_or(gpui::black()),
                     })
                     .collect();
                 // Skip links with unknown node keys or unparsable values

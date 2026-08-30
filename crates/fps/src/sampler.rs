@@ -49,11 +49,7 @@ impl FrameSampler {
     /// Drains the frames drawn since the previous call. Call once per rendered
     /// frame.
     pub(crate) fn tick(&mut self) {
-        let timings = self
-            .collector
-            .collect_unseen()
-            .into_iter()
-            .collect();
+        let timings = self.collector.collect_unseen().into_iter().collect();
         self.ingest(timings, Instant::now());
     }
 

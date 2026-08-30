@@ -3382,12 +3382,7 @@ impl AppModules {
 }
 
 impl Resolver for AppModules {
-    fn resolve<'js>(
-        &mut self,
-        ctx: &Ctx<'js>,
-        base: &str,
-        name: &str,
-    ) -> JsResult<String> {
+    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> JsResult<String> {
         let Some(application) = self.application_for_base(base) else {
             return Err(Exception::throw_message(
                 ctx,
@@ -3437,11 +3432,7 @@ impl Resolver for AppModules {
 }
 
 impl Loader for AppModules {
-    fn load<'js>(
-        &mut self,
-        ctx: &Ctx<'js>,
-        name: &str,
-    ) -> JsResult<Module<'js, Declared>> {
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> JsResult<Module<'js, Declared>> {
         let path = Self::untag(name);
         let source = read_module_source(Path::new(path))
             .map_err(|error| Exception::throw_message(ctx, &error.to_string()))?;

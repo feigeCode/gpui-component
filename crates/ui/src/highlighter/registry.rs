@@ -316,35 +316,74 @@ impl SyntaxColors {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StatusColors {
-    #[serde(rename = "error", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "error",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     error: Option<Hsla>,
-    #[serde(rename = "error.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "error.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     error_background: Option<Hsla>,
-    #[serde(rename = "error.border", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "error.border",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     error_border: Option<Hsla>,
-    #[serde(rename = "warning", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "warning",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     warning: Option<Hsla>,
-    #[serde(rename = "warning.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "warning.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     warning_background: Option<Hsla>,
-    #[serde(rename = "warning.border", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "warning.border",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     warning_border: Option<Hsla>,
     #[serde(rename = "info", deserialize_with = "crate::deserialize_optional_hsla")]
     info: Option<Hsla>,
-    #[serde(rename = "info.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "info.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     info_background: Option<Hsla>,
-    #[serde(rename = "info.border", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "info.border",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     info_border: Option<Hsla>,
-    #[serde(rename = "success", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "success",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     success: Option<Hsla>,
-    #[serde(rename = "success.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "success.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     success_background: Option<Hsla>,
-    #[serde(rename = "success.border", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "success.border",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     success_border: Option<Hsla>,
     #[serde(rename = "hint", deserialize_with = "crate::deserialize_optional_hsla")]
     hint: Option<Hsla>,
-    #[serde(rename = "hint.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "hint.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     hint_background: Option<Hsla>,
-    #[serde(rename = "hint.border", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "hint.border",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     hint_border: Option<Hsla>,
 }
 
@@ -438,21 +477,42 @@ impl StatusColors {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HighlightThemeStyle {
-    #[serde(rename = "editor.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_background: Option<Hsla>,
-    #[serde(rename = "editor.foreground", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.foreground",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_foreground: Option<Hsla>,
-    #[serde(rename = "editor.active_line.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.active_line.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_active_line: Option<Hsla>,
-    #[serde(rename = "editor.line_number", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.line_number",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_line_number: Option<Hsla>,
-    #[serde(rename = "editor.active_line_number", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.active_line_number",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_active_line_number: Option<Hsla>,
-    #[serde(rename = "editor.invisible", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.invisible",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_invisible: Option<Hsla>,
     /// Optional background color for the gutter (line-number column).
     /// Falls back to [`Self::editor_background`] when unset.
-    #[serde(rename = "editor.gutter.background", deserialize_with = "crate::deserialize_optional_hsla")]
+    #[serde(
+        rename = "editor.gutter.background",
+        deserialize_with = "crate::deserialize_optional_hsla"
+    )]
     pub editor_gutter_background: Option<Hsla>,
     #[serde(flatten)]
     pub status: StatusColors,

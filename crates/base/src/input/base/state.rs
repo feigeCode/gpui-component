@@ -112,9 +112,16 @@ actions!(
 #[derive(Clone)]
 pub enum InputEvent {
     Change,
-    PressEnter { secondary: bool, shift: bool },
+    PressEnter {
+        secondary: bool,
+        shift: bool,
+    },
     Focus,
     Blur,
+    GutterMarkerMouseDown {
+        marker_id: SharedString,
+        logical_row: usize,
+    },
 }
 
 pub(super) const CONTEXT: &str = "Input";
@@ -2793,12 +2800,16 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
             }
         }
 
-        if mask_changed {
-            // Masking rewrites the whole document, so ranges recorded against
-            // the old text no longer point at anything.
-            M::reset_annotations(self);
-        } else {
-            M::adjust_annotations(self, &range, new_text.len());
+        let document_changed = old_text != self.text;
+        if document_changed {
+            if mask_changed {
+                // Masking rewrites the whole document, so ranges recorded against
+                // the old text no longer point at anything.
+                M::reset_annotations(self);
+            } else {
+                M::adjust_annotations(self, &range, new_text.len());
+            }
+            M::document_did_change(self);
         }
         if mask_changed {
             // A segment-based history entry no longer matches the masked
@@ -2919,7 +2930,10 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
             }
         }
 
-        M::adjust_annotations(self, &range, new_text.len());
+        if old_text != self.text {
+            M::adjust_annotations(self, &range, new_text.len());
+            M::document_did_change(self);
+        }
         if let Some(diagnostics) = self.mode.diagnostics_mut() {
             diagnostics.reset(&self.text)
         }
@@ -3273,6 +3287,117 @@ mod tests {
                 f(crate::input::InputState::new(window, cx))
             })
         }
+    }
+
+    #[gpui::test]
+    fn editor_document_revision_tracks_only_text_mutations(cx: &mut TestAppContext) {
+        let view = InputView::<EditorMode>::new(cx);
+        let mut cx = VisualTestContext::from_window(view.window_handle.into(), cx);
+        let editor = view.input;
+
+        cx.update(|window, cx| {
+            editor.update(cx, |state, cx| {
+                assert_eq!(state.document_revision(), 0);
+                state.focus(window, cx);
+                state.set_selected_range(0..0, cx);
+                assert_eq!(state.document_revision(), 0);
+
+                state.set_value("alpha", window, cx);
+                assert_eq!(state.document_revision(), 1);
+                state.set_range_decorations(
+                    vec![crate::input::RangeDecoration::new("range", 1..3)],
+                    cx,
+                );
+                state.set_inline_widgets(
+                    vec![crate::input::InlineWidget::new("hint", 3, "hint")],
+                    cx,
+                );
+                state.set_value("alpha", window, cx);
+                assert_eq!(state.document_revision(), 1);
+                assert_eq!(state.range_decorations()[0].range(), &(1..3));
+                assert_eq!(state.inline_widgets()[0].offset(), 3);
+
+                state.insert("!", window, cx);
+                assert_eq!(state.document_revision(), 2);
+                state.set_selected_range(0..1, cx);
+                state.replace("A", window, cx);
+                assert_eq!(state.document_revision(), 3);
+
+                state.insert_completion(
+                    &lsp_types::CompletionItem {
+                        label: "z".into(),
+                        ..Default::default()
+                    },
+                    0..1,
+                    window,
+                    cx,
+                );
+                assert_eq!(state.document_revision(), 4);
+            });
+        });
+    }
+
+    #[gpui::test]
+    fn gutter_marker_lane_stays_reserved_after_markers_clear(cx: &mut TestAppContext) {
+        let view = InputView::build_editor(cx, |state| state.default_value("one\ntwo"));
+        let mut cx = VisualTestContext::from_window(view.window_handle.into(), cx);
+        let editor = view.input;
+
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let base_width = cx.read(|cx| {
+            editor
+                .read(cx)
+                .last_layout
+                .as_ref()
+                .unwrap()
+                .line_number_width
+        });
+
+        cx.update(|_, cx| {
+            editor.update(cx, |state, cx| {
+                state.set_gutter_marker_renderer(
+                    std::rc::Rc::new(|_| gpui::div().into_any_element()),
+                    cx,
+                );
+                state
+                    .set_gutter_markers(vec![crate::input::GutterMarker::new("run", 0, "run")], cx);
+            });
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let reserved_width = cx.read(|cx| {
+            editor
+                .read(cx)
+                .last_layout
+                .as_ref()
+                .unwrap()
+                .line_number_width
+        });
+        assert!(reserved_width > base_width);
+        cx.read(|cx| {
+            let state = editor.read(cx);
+            let marker = state
+                .gutter_marker_bounds("run")
+                .expect("marker should be laid out in the reserved lane");
+            assert_eq!(marker.right(), state.input_bounds().left() + reserved_width);
+            assert_eq!(
+                marker.size.width,
+                crate::input::element::GUTTER_MARKER_HITBOX_WIDTH
+            );
+        });
+
+        cx.update(|_, cx| {
+            editor.update(cx, |state, cx| state.clear_gutter_markers(cx));
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(
+            cx.read(|cx| editor
+                .read(cx)
+                .last_layout
+                .as_ref()
+                .unwrap()
+                .line_number_width),
+            reserved_width
+        );
     }
 
     #[gpui::test]

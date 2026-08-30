@@ -5,6 +5,7 @@ use gpui::{
     ParentElement, Render, Stateful, StatefulInteractiveElement, Styled, Window, div,
     prelude::FluentBuilder as _, px,
 };
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, Icon, IconName, Sizable, StyledExt,
     avatar::Avatar,
@@ -17,7 +18,6 @@ use gpui_component::{
     tag::Tag,
     v_flex,
 };
-use gpui_component::Colorize as _;
 
 use crate::section;
 

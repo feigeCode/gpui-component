@@ -10,8 +10,9 @@ use crate::{
 };
 use gpui::{
     AnyView, App, AppContext, ClipboardItem, Context, DefiniteLength, ElementId, Entity,
-    FocusHandle, InteractiveElement, IntoElement, KeyBinding, ParentElement as _, Pixels, Render,
-    StyleRefinement, Styled, WeakFocusHandle, Window, actions, div, prelude::FluentBuilder as _,
+    EventEmitter, FocusHandle, InteractiveElement, IntoElement, KeyBinding, ParentElement as _,
+    Pixels, Render, StyleRefinement, Styled, WeakFocusHandle, Window, actions, div,
+    prelude::FluentBuilder as _,
 };
 use gpui_base::{TextSelection, TextSelectionLayer, TextSelectionScopeId};
 use std::{any::TypeId, rc::Rc};
@@ -52,6 +53,13 @@ pub struct Root {
     window_id: gpui::WindowId,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DialogStateChanged {
+    pub active_count: usize,
+}
+
+impl EventEmitter<DialogStateChanged> for Root {}
+
 #[derive(Clone)]
 pub(crate) struct ActiveSheet {
     focus_handle: FocusHandle,
@@ -88,6 +96,12 @@ impl ActiveDialog {
 }
 
 impl Root {
+    fn emit_dialog_state_changed(&self, cx: &mut Context<'_, Root>) {
+        cx.emit(DialogStateChanged {
+            active_count: self.active_dialogs.len(),
+        });
+    }
+
     /// Clears window-owned text selection synchronously.
     #[deprecated(note = "use gpui_base::TextSelection::clear instead")]
     pub fn clear_text_selection(&mut self, cx: &mut Context<Self>) {
@@ -309,6 +323,7 @@ impl Root {
         // Opening a modal confines selection to it; drop any background
         // selection so it cannot linger (or be copied) under the modal.
         gpui_base::TextSelection::clear(window, cx);
+        self.emit_dialog_state_changed(cx);
         cx.notify();
     }
 
@@ -321,14 +336,19 @@ impl Root {
     }
 
     pub fn close_dialog(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
+        let had_dialog = !self.active_dialogs.is_empty();
         if let Some(handle) = self.close_dialog_internal() {
             window.focus(&handle, cx);
         }
         gpui_base::TextSelection::clear(window, cx);
+        if had_dialog {
+            self.emit_dialog_state_changed(cx);
+        }
         cx.notify();
     }
 
     pub(crate) fn defer_close_dialog(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
+        let had_dialog = !self.active_dialogs.is_empty();
         if let Some(handle) = self.close_dialog_internal() {
             let dialogs_count = self.active_dialogs.len();
 
@@ -349,10 +369,14 @@ impl Root {
             .detach();
         }
         gpui_base::TextSelection::clear(window, cx);
+        if had_dialog {
+            self.emit_dialog_state_changed(cx);
+        }
         cx.notify();
     }
 
     pub fn close_all_dialogs(&mut self, window: &mut Window, cx: &mut Context<'_, Root>) {
+        let had_dialogs = !self.active_dialogs.is_empty();
         self.focused_input = None;
         let previous_focused_handle = self
             .active_dialogs
@@ -363,6 +387,9 @@ impl Root {
             window.focus(&handle, cx);
         }
         gpui_base::TextSelection::clear(window, cx);
+        if had_dialogs {
+            self.emit_dialog_state_changed(cx);
+        }
         cx.notify();
     }
 

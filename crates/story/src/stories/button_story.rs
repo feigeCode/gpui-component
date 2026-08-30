@@ -3,6 +3,7 @@ use gpui::{
     IntoElement, ParentElement as _, Render, Styled as _, Window, prelude::FluentBuilder, px,
 };
 
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, Disableable as _, Icon, IconName, Selectable as _, Sizable as _, Size, Theme,
     button::{Button, ButtonCustomVariant, ButtonGroup, ButtonVariants as _},
@@ -10,7 +11,6 @@ use gpui_component::{
     progress::ProgressCircle,
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use crate::{ChangeStorySize, section, story_toolbar};

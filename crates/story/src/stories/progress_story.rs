@@ -2,6 +2,7 @@ use gpui::{
     Action, App, AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement,
     ParentElement, Render, Styled, Task, Window, div, prelude::FluentBuilder as _, px,
 };
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, IconName, Sizable, Size, StyledExt,
     button::Button,
@@ -9,7 +10,6 @@ use gpui_component::{
     progress::{Progress, ProgressCircle},
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::Deserialize;
 use std::time::Duration;
 

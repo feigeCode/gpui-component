@@ -17,11 +17,16 @@ use std::{
 };
 
 mod color;
+pub mod geometry;
 mod registry;
 mod schema;
 mod theme_color;
 
 pub use color::*;
+pub use geometry::{
+    BorderTokens, ControlSizeTokens, LayoutSizeTokens, MotionTokens, OpacityTokens,
+    OverlayGeometry, ResizeGeometry, ShadowGeometry, ThemeGeometry, TreeListGeometry,
+};
 pub use registry::*;
 pub use schema::*;
 pub use theme_color::*;
@@ -90,6 +95,9 @@ pub struct Theme {
     /// rather than extending this legacy surface.
     #[serde(default)]
     pub tokens: ThemeTokens,
+    /// Stable layout geometry retained for application compatibility.
+    #[serde(default)]
+    pub geometry: ThemeGeometry,
     pub highlight_theme: Arc<HighlightTheme>,
     pub light_theme: Rc<ThemeConfig>,
     pub dark_theme: Rc<ThemeConfig>,
@@ -127,6 +135,9 @@ pub struct Theme {
     /// Show the scrollbar mode, default: Scrolling
     #[serde(alias = "scrollbar_show")]
     pub scrollbar_mode: ScrollbarMode,
+    /// Backwards-compatible field name for [`Self::scrollbar_mode`].
+    #[serde(skip)]
+    pub scrollbar_show: ScrollbarMode,
     /// The notification setting.
     #[serde(skip)]
     pub notification: NotificationSettings,
@@ -220,7 +231,9 @@ impl Theme {
 
     /// Changes the scrollbar display mode and synchronizes the Base projection.
     pub fn set_scrollbar_mode(mode: ScrollbarMode, cx: &mut App) {
-        Theme::global_mut(cx).scrollbar_mode = mode;
+        let theme = Theme::global_mut(cx);
+        theme.scrollbar_mode = mode;
+        theme.scrollbar_show = mode;
         let base_theme = gpui_base::Theme::global_mut(cx);
         base_theme.scrollbar = base_theme
             .scrollbar
@@ -594,10 +607,12 @@ impl From<&ThemeColor> for Theme {
             list: ListSettings::default(),
             colors: *colors,
             tokens: ThemeTokens::from(colors),
+            geometry: ThemeGeometry::default(),
             light_theme: Rc::new(ThemeConfig::default()),
             dark_theme: Rc::new(ThemeConfig::default()),
             highlight_theme: HighlightTheme::default_light(),
             sheet: SheetSettings::default(),
+            scrollbar_show: ScrollbarMode::default(),
         }
     }
 }

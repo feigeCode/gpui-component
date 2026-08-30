@@ -887,10 +887,7 @@ mod tests {
             let _ = window.draw(cx);
         });
 
-        assert_eq!(
-            *captured.lock().unwrap(),
-            vec![None, None]
-        );
+        assert_eq!(*captured.lock().unwrap(), vec![None, None]);
     }
 
     #[test]

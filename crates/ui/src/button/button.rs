@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::ThemeStyled as _;
 use crate::{
-    ActiveTheme, Colorize as _, Disableable, Icon, RoleOverride, Selectable, Sizable, Size,
-    StyleSized, StyledExt,
+    ActiveTheme, Colorize as _, Disableable, Icon, IconSize, RoleOverride, Selectable, Sizable,
+    Size, StyleSized, StyledExt,
     button::ButtonIcon,
     h_flex,
     select::Caret,
@@ -202,6 +202,7 @@ pub struct Button {
     border_edges: Edges<bool>,
     dropdown_caret: bool,
     size: Size,
+    glyph_size: Option<IconSize>,
     compact: bool,
     tooltip: Option<(
         SharedString,
@@ -249,6 +250,7 @@ impl Button {
             },
             border_edges: Edges::all(true),
             size: Size::Medium,
+            glyph_size: None,
             tooltip: None,
             tooltip_builder: None,
             on_click: None,
@@ -338,6 +340,17 @@ impl Button {
     pub fn icon(mut self, icon: impl Into<ButtonIcon>) -> Self {
         self.icon = Some(icon.into());
         self
+    }
+
+    /// Set the icon glyph size independently from the button hit target.
+    pub fn glyph_size(mut self, size: IconSize) -> Self {
+        self.glyph_size = Some(size);
+        self
+    }
+
+    /// Compatibility alias for [`Self::accessibility_label`].
+    pub fn accessible_label(self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label(label)
     }
 
     /// Set the tooltip of the button.
@@ -520,10 +533,13 @@ impl RenderOnce for Button {
         let normal_style = style.normal(self.outline, cx);
         let selected_style = style.selected(self.outline, cx);
         let disabled_style = style.disabled(self.outline, cx);
-        let icon_size = match self.size {
-            Size::Size(v) => Size::Size(v * 0.75),
-            _ => self.size,
-        };
+        let icon_size = self
+            .glyph_size
+            .map(Size::from)
+            .unwrap_or_else(|| match self.size {
+                Size::Size(v) => Size::Size(v * 0.75),
+                _ => self.size,
+            });
         let has_content = self.icon.is_some() || self.label.is_some() || !children.is_empty();
 
         let focus_handle = window

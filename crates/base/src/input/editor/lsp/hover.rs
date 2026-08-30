@@ -1,7 +1,7 @@
 use anyhow::Result;
 use gpui::{App, Context, MouseMoveEvent, Task, Window};
-use web_time::Duration;
 use ropey::Rope;
+use web_time::Duration;
 
 use crate::input::{EditorMode, HoverPopoverState, InputBaseState, RopeExt};
 

@@ -4,6 +4,7 @@ use gpui::{
     px,
 };
 
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, Icon, IconName, StyledExt, WindowExt as _,
     button::{Button, ButtonVariants as _},
@@ -19,7 +20,6 @@ use gpui_component::{
     text::{TextView, markdown},
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use crate::{TestAction, section, story_toolbar_group};

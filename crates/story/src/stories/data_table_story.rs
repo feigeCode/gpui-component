@@ -12,6 +12,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Subscription, Task, TextAlign, Window, div,
     prelude::FluentBuilder as _, px,
 };
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme as _, Sizable as _, Size, StyleSized as _, StyledExt,
     button::Button,
@@ -24,7 +25,6 @@ use gpui_component::{
     },
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::{Deserialize, Serialize};
 
 use crate::story_toolbar_group;
@@ -448,11 +448,9 @@ impl StockTableDelegate {
     fn render_percent(&self, col: &Column, val: f64, cx: &mut App) -> AnyElement {
         self.value_cell(col)
             .when_some(change_colors(val, cx), |this, (foreground, background)| {
-                {
-                    let mut background = background;
-                    background.alpha = 0.05;
-                    this.text_color(foreground).bg(background)
-                }
+                let mut background = background;
+                background.alpha = 0.05;
+                this.text_color(foreground).bg(background)
             })
             .child(format!("{:+.2}%", val * 100.))
             .into_any_element()

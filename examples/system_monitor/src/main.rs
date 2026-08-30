@@ -352,7 +352,6 @@ impl SystemMonitor {
                 used: disk.total_space() - disk.available_space(),
             })
             .collect();
-
     }
 
     fn set_active_tab(&mut self, index: usize, _window: &mut Window, cx: &mut Context<Self>) {

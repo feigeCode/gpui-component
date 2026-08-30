@@ -3,10 +3,10 @@ use gpui::{
     Render, SharedString, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, button::Button, h_flex, input::*, menu::PopupMenuItem, tab::TabBar, v_flex,
 };
-use gpui_component::Colorize as _;
 
 use crate::story_toolbar_group;
 

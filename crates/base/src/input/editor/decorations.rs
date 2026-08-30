@@ -1,11 +1,205 @@
 use crate::input::EditorMode;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::Range;
+use std::rc::Rc;
 
-use gpui::{App, Context, HighlightStyle, WeakEntity};
+use gpui::{
+    AnyElement, App, Bounds, Context, HighlightStyle, Hsla, Pixels, SharedString, WeakEntity,
+};
 use ropey::Rope;
 use sum_tree::Bias;
 
 use super::{InputBaseState, RopeExt as _};
+
+/// A feature-owned marker anchored to a logical editor row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GutterMarker {
+    id: SharedString,
+    logical_row: usize,
+    icon: SharedString,
+    tooltip: Option<SharedString>,
+    enabled: bool,
+}
+
+impl GutterMarker {
+    pub fn new(
+        id: impl Into<SharedString>,
+        logical_row: usize,
+        icon: impl Into<SharedString>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            logical_row,
+            icon: icon.into(),
+            tooltip: None,
+            enabled: true,
+        }
+    }
+
+    pub fn id(&self) -> &SharedString {
+        &self.id
+    }
+
+    pub fn logical_row(&self) -> usize {
+        self.logical_row
+    }
+
+    pub fn icon(&self) -> &SharedString {
+        &self.icon
+    }
+
+    pub fn tooltip(&self) -> Option<&SharedString> {
+        self.tooltip.as_ref()
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn with_tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
+        self.tooltip = Some(tooltip.into());
+        self
+    }
+
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+}
+
+/// Application-owned presentation for a gutter marker.
+pub type GutterMarkerRenderer = std::rc::Rc<dyn Fn(&GutterMarker) -> AnyElement>;
+
+/// Geometric presentation for an editor range decoration.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RangeDecorationStyle {
+    /// Fill the continuous visual range.
+    Fill,
+    /// Draw a continuous one-pixel frame around the visual range.
+    #[default]
+    Frame,
+}
+
+/// A geometric decoration over a UTF-8 byte range.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RangeDecoration {
+    id: SharedString,
+    range: Range<usize>,
+    style: RangeDecorationStyle,
+    color: Option<Hsla>,
+}
+
+impl RangeDecoration {
+    pub fn new(id: impl Into<SharedString>, range: Range<usize>) -> Self {
+        Self {
+            id: id.into(),
+            range,
+            style: RangeDecorationStyle::default(),
+            color: None,
+        }
+    }
+
+    pub fn id(&self) -> &SharedString {
+        &self.id
+    }
+
+    pub fn range(&self) -> &Range<usize> {
+        &self.range
+    }
+
+    pub fn style(&self) -> RangeDecorationStyle {
+        self.style
+    }
+
+    pub fn color(&self) -> Option<Hsla> {
+        self.color
+    }
+
+    pub fn with_style(mut self, style: RangeDecorationStyle) -> Self {
+        self.style = style;
+        self
+    }
+
+    pub fn with_color(mut self, color: Hsla) -> Self {
+        self.color = Some(color);
+        self
+    }
+}
+
+/// Non-document text painted at a UTF-8 byte offset.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineWidget {
+    id: SharedString,
+    offset: usize,
+    text: SharedString,
+}
+
+impl InlineWidget {
+    pub fn new(id: impl Into<SharedString>, offset: usize, text: impl Into<SharedString>) -> Self {
+        Self {
+            id: id.into(),
+            offset,
+            text: text.into(),
+        }
+    }
+
+    pub fn id(&self) -> &SharedString {
+        &self.id
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn text(&self) -> &SharedString {
+        &self.text
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct EditorAnnotations {
+    pub(crate) document_revision: u64,
+    pub(crate) completion_epoch: u64,
+    pub(crate) gutter_markers: Vec<GutterMarker>,
+    pub(crate) gutter_lane_reserved: bool,
+    pub(crate) gutter_marker_bounds: Rc<RefCell<HashMap<SharedString, Bounds<Pixels>>>>,
+    pub(crate) range_decorations: Vec<RangeDecoration>,
+    pub(crate) inline_widgets: Vec<InlineWidget>,
+    pub(crate) gutter_marker_renderer: Option<GutterMarkerRenderer>,
+}
+
+impl EditorAnnotations {
+    pub(crate) fn adjust_for_edit(&mut self, edited_range: &Range<usize>, inserted_len: usize) {
+        for decoration in &mut self.range_decorations {
+            decoration.range = adjust_range_for_edit(&decoration.range, edited_range, inserted_len);
+        }
+        self.range_decorations
+            .retain(|decoration| !decoration.range.is_empty());
+        for widget in &mut self.inline_widgets {
+            widget.offset = adjust_offset_for_edit(widget.offset, edited_range, inserted_len);
+        }
+    }
+}
+
+fn adjust_offset_for_edit(
+    offset: usize,
+    edited_range: &Range<usize>,
+    inserted_len: usize,
+) -> usize {
+    if offset <= edited_range.start {
+        return offset;
+    }
+    if offset < edited_range.end {
+        return edited_range.start.saturating_add(inserted_len);
+    }
+    let removed_len = edited_range.end.saturating_sub(edited_range.start);
+    if inserted_len >= removed_len {
+        offset.saturating_add(inserted_len - removed_len)
+    } else {
+        offset.saturating_sub(removed_len - inserted_len)
+    }
+}
 
 /// A presentation style applied to a UTF-8 byte range in an input.
 ///
@@ -219,6 +413,88 @@ fn normalize(text: &Rope, decorations: Vec<TextDecoration>) -> Vec<TextDecoratio
 }
 
 impl InputBaseState<EditorMode> {
+    /// Monotonic content revision. Selection, focus and scrolling do not change it.
+    pub fn document_revision(&self) -> u64 {
+        self.extras.annotations.document_revision
+    }
+
+    /// Replace all gutter markers. The marker lane remains reserved after first use.
+    pub fn set_gutter_markers(&mut self, markers: Vec<GutterMarker>, cx: &mut Context<Self>) {
+        self.extras.annotations.gutter_markers = markers;
+        self.extras.annotations.gutter_lane_reserved = true;
+        cx.notify();
+    }
+
+    pub fn clear_gutter_markers(&mut self, cx: &mut Context<Self>) {
+        if !self.extras.annotations.gutter_markers.is_empty() {
+            self.extras.annotations.gutter_markers.clear();
+            cx.notify();
+        }
+    }
+
+    pub fn gutter_markers(&self) -> &[GutterMarker] {
+        &self.extras.annotations.gutter_markers
+    }
+
+    pub fn gutter_marker_bounds(&self, id: &str) -> Option<Bounds<Pixels>> {
+        self.extras
+            .annotations
+            .gutter_marker_bounds
+            .borrow()
+            .get(id)
+            .copied()
+    }
+
+    pub fn set_gutter_marker_renderer(
+        &mut self,
+        renderer: GutterMarkerRenderer,
+        cx: &mut Context<Self>,
+    ) {
+        self.extras.annotations.gutter_marker_renderer = Some(renderer);
+        cx.notify();
+    }
+
+    #[doc(hidden)]
+    pub fn project_gutter_marker_renderer(&mut self, renderer: GutterMarkerRenderer) {
+        self.extras.annotations.gutter_marker_renderer = Some(renderer);
+    }
+
+    pub fn set_range_decorations(
+        &mut self,
+        decorations: Vec<RangeDecoration>,
+        cx: &mut Context<Self>,
+    ) {
+        self.extras.annotations.range_decorations = normalize_ranges(&self.text, decorations);
+        cx.notify();
+    }
+
+    pub fn clear_range_decorations(&mut self, cx: &mut Context<Self>) {
+        if !self.extras.annotations.range_decorations.is_empty() {
+            self.extras.annotations.range_decorations.clear();
+            cx.notify();
+        }
+    }
+
+    pub fn range_decorations(&self) -> &[RangeDecoration] {
+        &self.extras.annotations.range_decorations
+    }
+
+    pub fn set_inline_widgets(&mut self, widgets: Vec<InlineWidget>, cx: &mut Context<Self>) {
+        self.extras.annotations.inline_widgets = normalize_widgets(&self.text, widgets);
+        cx.notify();
+    }
+
+    pub fn clear_inline_widgets(&mut self, cx: &mut Context<Self>) {
+        if !self.extras.annotations.inline_widgets.is_empty() {
+            self.extras.annotations.inline_widgets.clear();
+            cx.notify();
+        }
+    }
+
+    pub fn inline_widgets(&self) -> &[InlineWidget] {
+        &self.extras.annotations.inline_widgets
+    }
+
     /// Create an independently managed collection of text decorations.
     ///
     /// This follows Monaco's
@@ -248,6 +524,27 @@ impl InputBaseState<EditorMode> {
             id,
         }
     }
+}
+
+fn normalize_ranges(text: &Rope, decorations: Vec<RangeDecoration>) -> Vec<RangeDecoration> {
+    decorations
+        .into_iter()
+        .filter_map(|mut decoration| {
+            decoration.range = text.clip_offset(decoration.range.start, Bias::Left)
+                ..text.clip_offset(decoration.range.end, Bias::Right);
+            (!decoration.range.is_empty()).then_some(decoration)
+        })
+        .collect()
+}
+
+fn normalize_widgets(text: &Rope, widgets: Vec<InlineWidget>) -> Vec<InlineWidget> {
+    widgets
+        .into_iter()
+        .map(|mut widget| {
+            widget.offset = text.clip_offset(widget.offset, Bias::Left);
+            widget
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -332,5 +629,32 @@ mod tests {
         assert_eq!(adjust_range_for_edit(&(2..6), &(2..2), 2), 4..8);
         assert_eq!(adjust_range_for_edit(&(2..6), &(6..6), 2), 2..6);
         assert_eq!(adjust_range_for_edit(&(2..6), &(2..6), 3), 2..5);
+    }
+
+    #[test]
+    fn geometric_decorations_and_widgets_follow_utf8_edits() {
+        let mut annotations = EditorAnnotations {
+            range_decorations: vec![RangeDecoration::new("range", 2..6)],
+            inline_widgets: vec![InlineWidget::new("hint", 6, "hint")],
+            ..Default::default()
+        };
+
+        annotations.adjust_for_edit(&(0..0), "é".len());
+        assert_eq!(annotations.range_decorations[0].range(), &(4..8));
+        assert_eq!(annotations.inline_widgets[0].offset(), 8);
+
+        annotations.adjust_for_edit(&(5..7), 1);
+        assert_eq!(annotations.range_decorations[0].range(), &(4..7));
+        assert_eq!(annotations.inline_widgets[0].offset(), 7);
+    }
+
+    #[test]
+    fn extension_ranges_and_offsets_clip_to_utf8_boundaries() {
+        let text = Rope::from("éx");
+        let decorations = normalize_ranges(&text, vec![RangeDecoration::new("range", 1..3)]);
+        let widgets = normalize_widgets(&text, vec![InlineWidget::new("hint", 1, "hint")]);
+
+        assert_eq!(decorations[0].range(), &(0..3));
+        assert_eq!(widgets[0].offset(), 0);
     }
 }

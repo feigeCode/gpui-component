@@ -3,6 +3,7 @@ use gpui::{
     ParentElement, Render, SharedString, Styled, Subscription, Window, div, px, rems,
 };
 
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme, IconName, StyledExt,
     button::{Button, ButtonVariants as _},
@@ -11,7 +12,6 @@ use gpui_component::{
     label::{HighlightsMatch, Label},
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use crate::{section, story_toolbar_group};

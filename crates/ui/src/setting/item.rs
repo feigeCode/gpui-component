@@ -121,6 +121,30 @@ impl SettingItem {
         self
     }
 
+    /// Add searchable text for a custom element setting item.
+    ///
+    /// Only applies to [`SettingItem::Element`].
+    pub fn search_text(mut self, text: impl Into<SharedString>) -> Self {
+        if let SettingItem::Element { keywords, .. } = &mut self {
+            keywords.push(text.into());
+        }
+        self
+    }
+
+    /// Add multiple searchable texts for a custom element setting item.
+    ///
+    /// Only applies to [`SettingItem::Element`].
+    pub fn search_texts<I, S>(mut self, texts: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<SharedString>,
+    {
+        if let SettingItem::Element { keywords, .. } = &mut self {
+            keywords.extend(texts.into_iter().map(Into::into));
+        }
+        self
+    }
+
     /// Set whether the setting item is disabled, default is false.
     ///
     /// A disabled item is rendered with reduced opacity. For

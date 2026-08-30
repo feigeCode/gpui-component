@@ -3,6 +3,7 @@ use gpui::{
     IntoElement, ParentElement as _, Pixels, Render, StyleRefinement, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
+use gpui_component::Colorize as _;
 use gpui_component::{
     ActiveTheme as _, Icon, IconName, Sizable, Size, StyledExt as _,
     accordion::{Accordion, AccordionItem},
@@ -13,7 +14,6 @@ use gpui_component::{
     tag::Tag,
     v_flex,
 };
-use gpui_component::Colorize as _;
 use serde::Deserialize;
 
 use crate::{ChangeStorySize, section, story_toolbar};

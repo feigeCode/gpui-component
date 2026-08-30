@@ -14,14 +14,15 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use palette::FromColor;
 use gpui::{
-    AnyElement, App, BorderStyle, Bounds, ClipboardItem, ColorExt as _, Corners, Edges, Element, ElementId,
-    Entity, GlobalElementId, Hitbox, Hsla, InspectorElementId, InteractiveElement, IntoElement,
-    LayoutId, PaintQuad, ParentElement, Pixels, Point, SharedString, StatefulInteractiveElement,
-    Styled, StyledText, WeakEntity, Window, div, px, relative, rems, rgb, transparent_black,
+    AnyElement, App, BorderStyle, Bounds, ClipboardItem, ColorExt as _, Corners, Edges, Element,
+    ElementId, Entity, GlobalElementId, Hitbox, Hsla, InspectorElementId, InteractiveElement,
+    IntoElement, LayoutId, PaintQuad, ParentElement, Pixels, Point, SharedString,
+    StatefulInteractiveElement, Styled, StyledText, WeakEntity, Window, div, px, relative, rems,
+    rgb, transparent_black,
 };
 use gpui_base::{Button, TextSelectionHandle, TextSelectionRegistration, TextSelectionRun};
+use palette::FromColor;
 
 use crate::theme_tokens::token_color;
 use crate::{spec::CallbackId, view::ScriptView};
