@@ -17,6 +17,10 @@ edition.workspace = true
 name = "gpui_base"
 doctest = false
 
+[[bench]]
+name = "motion"
+harness = false
+
 [features]
 inspector = ["gpui_macros/inspector", "gpui/inspector"]
 
@@ -24,11 +28,15 @@ inspector = ["gpui_macros/inspector", "gpui/inspector"]
 anyhow.workspace = true
 aho-corasick = "1.1.3"
 chrono = "0.4.38"
+futures = "0.3"
 gpui.workspace = true
 gpui_macros.workspace = true
 web-time.workspace = true
 lsp-types.workspace = true
 palette.workspace = true
+markdown = { version = "1.0.0", features = ["serde"] }
+html5ever = "0.27"
+markup5ever_rcdom = "0.3.0"
 ropey.workspace = true
 regex = "1"
 schemars.workspace = true

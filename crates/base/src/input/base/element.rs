@@ -1549,6 +1549,7 @@ impl<M: InputModeKind> TextElement<M> {
 
             let line_layout = LineLayout::new()
                 .lines(smallvec::smallvec![shaped_line])
+                .with_background(has_background(line_runs))
                 .with_whitespaces(whitespace_indicators);
             return vec![line_layout];
         }
@@ -1557,6 +1558,7 @@ impl<M: InputModeKind> TextElement<M> {
         if state.text.len() == 0 {
             let placeholder_text = display_text.to_string();
             let mut placeholder_lines = SmallVec::new();
+            let mut line_has_background = false;
 
             for (line, line_runs) in placeholder_line_runs(&placeholder_text, runs) {
                 let shaped_line = window.text_system().shape_line(
@@ -1565,12 +1567,14 @@ impl<M: InputModeKind> TextElement<M> {
                     &line_runs,
                     None,
                 );
+                line_has_background |= has_background(&line_runs);
                 placeholder_lines.push(shaped_line);
             }
 
             // Keep placeholder lines in a single layout to stay parallel with visible_* metadata.
             let line_layout = LineLayout::new()
                 .lines(placeholder_lines)
+                .with_background(line_has_background)
                 .with_whitespaces(whitespace_indicators);
             return vec![line_layout];
         }
@@ -1591,6 +1595,7 @@ impl<M: InputModeKind> TextElement<M> {
             debug_assert_eq!(line_item.len(), line_text.len());
 
             let mut wrapped_lines: SmallVec<[ShapedLine; 1]> = SmallVec::with_capacity(1);
+            let mut line_has_background = false;
 
             for range in &line_item.wrapped_lines {
                 let line_runs = runs_for_range(runs, run_offset, &range);
@@ -1611,6 +1616,7 @@ impl<M: InputModeKind> TextElement<M> {
                     .text_system()
                     .shape_line(sub_line, font_size, &line_runs, None);
 
+                line_has_background |= has_background(&line_runs);
                 wrapped_lines.push(shaped_line);
             }
 
@@ -1629,6 +1635,7 @@ impl<M: InputModeKind> TextElement<M> {
             let line_layout = LineLayout::new()
                 .lines(wrapped_lines)
                 .wrap_indent(wrap_indent)
+                .with_background(line_has_background)
                 .with_whitespaces(whitespace_indicators.clone());
             lines.push(line_layout);
 
@@ -2430,6 +2437,51 @@ impl<M: InputModeKind> Element for TextElement<M> {
             }
         }
 
+        // Keep scrollbar offset always be positive，Start from the left position
+        let scroll_offset = if text_align == TextAlign::Right {
+            (prepaint.scroll_size.width - prepaint.bounds.size.width).max(px(0.))
+        } else if text_align == TextAlign::Center {
+            (prepaint.scroll_size.width - prepaint.bounds.size.width)
+                .half()
+                .max(px(0.))
+        } else {
+            px(0.)
+        };
+
+        // Paint glyph backgrounds
+        //
+        // gpui's `paint` only draws glyphs, underlines, and strikethroughs, so decoration
+        // backgrounds need their own pass. It runs ahead of the indent guides, selections,
+        // and text so a highlighted range sits under them instead of covering them.
+        let mut offset_y = invisible_top_padding;
+        for (line, &buffer_line) in prepaint
+            .last_layout
+            .lines
+            .iter()
+            .zip(prepaint.last_layout.visible_buffer_lines.iter())
+        {
+            let p = point(
+                origin.x + prepaint.last_layout.line_number_width + scroll_offset,
+                origin.y + offset_y,
+            );
+
+            line.paint_background(
+                p,
+                line_height,
+                text_align,
+                Some(prepaint.last_layout.content_width),
+                window,
+                cx,
+            );
+
+            offset_y += line.size(line_height).height;
+
+            // Ghost lines shift every later line down.
+            if Some(buffer_line) == prepaint.current_row {
+                offset_y += prepaint.ghost_lines_height;
+            }
+        }
+
         // Paint indent guides
         if let Some(path) = prepaint.indent_guides_path.take() {
             window.paint_path(path, editor_style.border.opacity(0.85));
@@ -2475,17 +2527,6 @@ impl<M: InputModeKind> Element for TextElement<M> {
         let mut offset_y = invisible_top_padding;
         let ghost_lines = &prepaint.ghost_lines;
         let has_ghost_lines = !ghost_lines.is_empty();
-
-        // Keep scrollbar offset always be positive，Start from the left position
-        let scroll_offset = if text_align == TextAlign::Right {
-            (prepaint.scroll_size.width - prepaint.bounds.size.width).max(px(0.))
-        } else if text_align == TextAlign::Center {
-            (prepaint.scroll_size.width - prepaint.bounds.size.width)
-                .half()
-                .max(px(0.))
-        } else {
-            px(0.)
-        };
 
         // Track the y-position of the cursor row for positioning the first line suffix
         let mut cursor_row_y = None;
@@ -2902,6 +2943,12 @@ fn split_run_for_ime_underline(
     .into_iter()
     .filter(|run| run.len > 0)
     .collect()
+}
+
+/// Whether any of these runs paints a glyph background, used to skip the background
+/// paint pass for lines without highlights.
+fn has_background(runs: &[TextRun]) -> bool {
+    runs.iter().any(|run| run.background_color.is_some())
 }
 
 fn split_runs_by_bg_segments(

@@ -336,8 +336,7 @@ fn tag_has_intrinsic_paint(tag: &str) -> bool {
                             matches!(
                                 property.trim(),
                                 "fill" | "stroke" | "stop-color" | "flood-color"
-                            )
-                                && is_intrinsic_paint(value)
+                            ) && is_intrinsic_paint(value)
                         })
                 }) {
                     return true;

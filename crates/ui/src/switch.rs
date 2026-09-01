@@ -6,14 +6,8 @@ use gpui::{
     RenderOnce, SharedString, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _,
     px,
 };
-use gpui_base::{Spring, Switch as BaseSwitch, SwitchThumb, SwitchTrack, spring};
-use std::{rc::Rc, time::Duration};
-
-/// Thumb travel motion.
-///
-/// Critically damped: the thumb slides inside a track it must not leave, so an
-/// overshoot would push it through the border.
-const THUMB_SPRING: Spring = Spring::new(Duration::from_millis(180)).with_epsilon(0.1);
+use gpui_base::{Switch as BaseSwitch, SwitchThumb, SwitchTrack, spring};
+use std::rc::Rc;
 
 /// A Switch element that can be toggled on or off.
 #[derive(IntoElement)]
@@ -131,8 +125,13 @@ impl RenderOnce for Switch {
             .map(Background::from)
             .unwrap_or(cx.theme().tokens.primary.into());
         let unchecked_bg: Background = cx.theme().tokens.switch.into();
-        let disabled_checked_bg = checked_bg.clone().opacity(0.5);
+        // GPUI's element opacity multiplies each primitive's alpha instead of
+        // compositing the subtree as one group, so fading the whole control
+        // would let the track show through the thumb. Fading the track alone
+        // lands on the pixels a grouped fade would: the thumb is `background`.
+        let disabled_bg = if checked { checked_bg } else { unchecked_bg }.opacity(0.5);
         let toggle_bg: Background = cx.theme().tokens.switch_thumb.into();
+        let disabled_label_color = cx.theme().muted_foreground;
 
         let (bg_width, bg_height) = match self.size {
             Size::XSmall | Size::Small => (px(28.), px(16.)),
@@ -161,7 +160,7 @@ impl RenderOnce for Switch {
             } else {
                 px(0.)
             },
-            THUMB_SPRING,
+            cx.theme().motion_tokens().spring_move,
             window,
             cx,
         );
@@ -170,6 +169,11 @@ impl RenderOnce for Switch {
             BaseSwitch::new(self.id.clone())
                 .checked(checked)
                 .disabled(self.disabled)
+                .styles(|styles| {
+                    styles.disabled(|style| {
+                        style.text_color(disabled_label_color).cursor_not_allowed()
+                    })
+                })
                 .when_some(accessibility_label, |this, label| {
                     this.accessibility_label(label)
                 })
@@ -199,23 +203,16 @@ impl RenderOnce for Switch {
                         .styles(|styles| {
                             styles
                                 .checked(|style| style.bg(checked_bg))
-                                .disabled(|style| {
-                                    style.when(checked, |style| style.bg(disabled_checked_bg))
-                                })
+                                .disabled(|style| style.bg(disabled_bg))
                         })
                         .map(|this| self.tooltip.apply(this))
                         .child(
                             // Switch Toggle
                             SwitchThumb::new(checked)
-                                .disabled(self.disabled)
                                 .rounded(radius)
                                 .size(bar_width)
                                 .left(thumb_x)
-                                .when(!self.disabled, |this| this.bg(toggle_bg))
-                                .styles(|styles| {
-                                    styles
-                                        .disabled(|style| style.bg(toggle_bg.clone().opacity(0.35)))
-                                }),
+                                .bg(toggle_bg),
                         ),
                 )
                 .when_some(self.label, |this, label| {

@@ -115,6 +115,7 @@ sum-tree.workspace = true
 tracing.workspace = true
 log.workspace = true
 palette.workspace = true
+markdown = { version = "1.0.0", features = ["serde"] }
 
 enum-iterator = "2.1.0"
 itertools = "0.13.0"
@@ -122,18 +123,8 @@ once_cell = "1.19.0"
 paste = { package = "pastey", version = "0.2.3" }
 uuid = "1.10"
 
-# Async primitives (cross-platform, including WASM)
-futures = "0.3"
-
 # Chart
 num-traits = "0.2"
-
-# Markdown Parser
-markdown = { version = "1.0.0", features = ["serde"] }
-
-# HTML Parser
-html5ever = "0.27"
-markup5ever_rcdom = "0.3.0"
 
 # Calendar
 chrono = "0.4.38"

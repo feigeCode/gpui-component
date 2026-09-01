@@ -5,5 +5,6 @@ fn main() {
         .nth(1)
         .unwrap_or_else(|| "overview".to_string());
 
-    showcase::run_native(&component);
+    let app = gpui_platform::application();
+    showcase::run(app, component);
 }

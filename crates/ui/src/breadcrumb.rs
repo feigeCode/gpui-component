@@ -184,9 +184,7 @@ impl RenderOnce for Breadcrumb {
         for (ix, item) in self.items.into_iter().enumerate() {
             let is_last = ix == items_count - 1;
 
-            let item = item
-                .id(ix)
-                .colors(self.foreground, self.muted_foreground);
+            let item = item.id(ix).colors(self.foreground, self.muted_foreground);
             children.push(item.is_last(is_last).into_any_element());
             if !is_last {
                 children.push(BreadcrumbSeparator.into_any_element());
