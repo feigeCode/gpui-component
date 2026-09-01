@@ -1149,6 +1149,103 @@ pub struct Plugin {
     view: Entity<ScriptView>,
 }
 
+/// Parameters for embedding one script view in a host-owned window.
+pub struct ViewLoadOptions {
+    root: PathBuf,
+    entry: String,
+    policy: Rc<Policy>,
+    write_type_declarations: bool,
+}
+
+impl ViewLoadOptions {
+    pub fn new(root: impl Into<PathBuf>, entry: impl Into<String>, policy: Rc<Policy>) -> Self {
+        Self {
+            root: root.into(),
+            entry: entry.into(),
+            policy,
+            write_type_declarations: false,
+        }
+    }
+
+    pub fn write_type_declarations(mut self, write: bool) -> Self {
+        self.write_type_declarations = write;
+        self
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn entry(&self) -> &str {
+        &self.entry
+    }
+
+    pub fn policy(&self) -> &Rc<Policy> {
+        &self.policy
+    }
+
+    pub fn writes_type_declarations(&self) -> bool {
+        self.write_type_declarations
+    }
+}
+
+/// A script view and the policy/application lifetime that owns it.
+pub struct LoadedScriptView {
+    runtime: Rc<ShellRuntime>,
+    view: Entity<ScriptView>,
+    policy: Rc<Policy>,
+    application: Option<Rc<crate::runtime::ApplicationGeneration>>,
+    unloaded: bool,
+}
+
+impl std::fmt::Debug for LoadedScriptView {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LoadedScriptView")
+            .field("unloaded", &self.unloaded)
+            .finish_non_exhaustive()
+    }
+}
+
+impl LoadedScriptView {
+    pub fn view(&self) -> &Entity<ScriptView> {
+        &self.view
+    }
+
+    pub fn is_unloaded(&self) -> bool {
+        self.unloaded
+    }
+
+    pub fn unload(&mut self, cx: &mut App) {
+        if self.unloaded {
+            return;
+        }
+        self.view.update(cx, |view, _| view.retire());
+        if let Some(application) = self.application.take() {
+            self.runtime
+                .release_application_generation(&application, cx);
+        }
+        crate::engine::quickjs::cancel_policy_tasks(&self.policy);
+        self.policy.revoke_host_modules();
+        self.unloaded = true;
+    }
+}
+
+impl Drop for LoadedScriptView {
+    fn drop(&mut self) {
+        if self.unloaded {
+            return;
+        }
+        if let Some(application) = self.application.take() {
+            self.runtime
+                .release_application_generation_without_context(&application);
+        }
+        crate::engine::quickjs::cancel_policy_tasks(&self.policy);
+        self.policy.revoke_host_modules();
+        self.unloaded = true;
+    }
+}
+
 impl Plugin {
     pub fn manifest(&self) -> &PluginManifest {
         &self.manifest
@@ -1245,12 +1342,26 @@ fn load_view_with_policy(
     window: &mut Window,
     cx: &mut App,
 ) -> Result<Entity<ScriptView>> {
+    load_view_with_options(runtime, root, entry, policy, true, window, cx)
+}
+
+fn load_view_with_options(
+    runtime: &Rc<ShellRuntime>,
+    root: &Path,
+    entry: &str,
+    policy: Rc<Policy>,
+    write_type_declarations: bool,
+    window: &mut Window,
+    cx: &mut App,
+) -> Result<Entity<ScriptView>> {
     let loaded = {
         let (_scope, _) =
             scope::enter_with_runtime(runtime, window, cx, ScopePhase::Task, None, policy.clone());
-        runtime.load_app(root, entry).and_then(|view_type| {
-            runtime.instantiate_view_with_policy(&view_type, policy.clone(), window, cx)
-        })
+        runtime
+            .load_app_with_options(root, entry, write_type_declarations)
+            .and_then(|view_type| {
+                runtime.instantiate_view_with_policy(&view_type, policy.clone(), window, cx)
+            })
     };
 
     if loaded.is_err() {
@@ -1276,6 +1387,32 @@ impl Render for ApplicationLoadFailure {
 }
 
 impl ShellRuntime {
+    /// Loads one view under an explicit host-owned policy for embedding.
+    pub fn load_view(
+        self: &Rc<Self>,
+        options: ViewLoadOptions,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Result<LoadedScriptView> {
+        let view = load_view_with_options(
+            self,
+            &options.root,
+            &options.entry,
+            options.policy.clone(),
+            options.write_type_declarations,
+            window,
+            cx,
+        )?;
+        let application = view.read(cx).application_generation();
+        Ok(LoadedScriptView {
+            runtime: self.clone(),
+            view,
+            policy: options.policy,
+            application,
+            unloaded: false,
+        })
+    }
+
     /// Loads one application as this window's root view.
     ///
     /// The common single-application host needs no plugin discovery or id
@@ -1615,9 +1752,56 @@ fn default_data_home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{EmbeddingProfile, HostModule, HostValue};
     use gpui::{TestAppContext, VisualTestContext};
     use std::ops::Deref as _;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    const CONTAINED_AUTHORITY_PROBES: &[(&str, &str)] = &[
+        (
+            "bind-keys",
+            r#"
+                import { View } from "gpui";
+                export default class Probe extends View {
+                  init(_props, cx) {
+                    cx.bind_keys([{ keystroke: "ctrl-alt-y", action: "probe" }]);
+                  }
+                  render() { return null; }
+                }
+            "#,
+        ),
+        (
+            "open-url",
+            r#"
+                import { View } from "gpui";
+                export default class Probe extends View {
+                  init(_props, cx) { cx.open_url("https://example.com"); }
+                  render() { return null; }
+                }
+            "#,
+        ),
+        (
+            "window-mutation",
+            r#"
+                import { View } from "gpui";
+                export default class Probe extends View {
+                  init() { window.minimize_window(); }
+                  render() { return null; }
+                }
+            "#,
+        ),
+        (
+            "link-navigation",
+            r#"
+                import { View } from "gpui";
+                import { Link } from "gpui-base";
+                export default class Probe extends View {
+                  init() { Link.new("outside").href("https://example.com"); }
+                  render() { return null; }
+                }
+            "#,
+        ),
+    ];
 
     const VALID: &str = r#"{
         "id": "com.example.inbox",
@@ -1760,6 +1944,79 @@ mod tests {
             .update(|_, cx| other_runtime.refresh(&root, cx))
             .expect_err("a runtime must not refresh another runtime's application");
         assert!(error.to_string().contains("different gpui-shell runtime"));
+    }
+
+    #[gpui::test]
+    fn contained_embedded_views_refuse_application_authority(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let runtime = ShellRuntime::new_isolated().expect("runtime");
+        cx.update(|cx| runtime.set_global(cx));
+        let tree = TempTree::new("contained-authority");
+        let window = cx.add_window(|_, _| Empty);
+        let mut context = VisualTestContext::from_window(*window.deref(), cx);
+
+        for (name, source) in CONTAINED_AUTHORITY_PROBES {
+            let root = tree.path().join(name);
+            std::fs::create_dir_all(&root).expect("create probe directory");
+            std::fs::write(root.join("main.js"), source).expect("write probe");
+            let policy = Rc::new(Policy::new().with_embedding_profile(EmbeddingProfile::Contained));
+            let options = ViewLoadOptions::new(root, "main.js", policy);
+            let result = context.update(|window, cx| runtime.load_view(options, window, cx));
+
+            let error = result.expect_err("contained view must refuse host authority");
+            assert!(error.to_string().contains("contained"), "{name}: {error}");
+        }
+    }
+
+    #[gpui::test]
+    fn embedded_view_unload_retires_view_and_revokes_modules(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        let runtime = ShellRuntime::new_isolated().expect("runtime");
+        cx.update(|cx| runtime.set_global(cx));
+        let tree = TempTree::new("embedded-unload");
+        let root = tree.path().join("plugin");
+        std::fs::create_dir_all(&root).expect("create plugin directory");
+        std::fs::write(
+            root.join("main.js"),
+            r#"
+                import { View } from "gpui";
+                import { Input, InputState } from "gpui-base";
+                import { increment } from "calculator";
+                export default class Probe extends View {
+                  init() { this.input = InputState.new({ value: `${increment(41)}` }); }
+                  render() { return Input.new(this.input); }
+                }
+            "#,
+        )
+        .expect("write plugin");
+        let policy = Rc::new(
+            Policy::new()
+                .with_embedding_profile(EmbeddingProfile::Contained)
+                .with_host_module(
+                    HostModule::new("calculator").function("increment", |arguments| {
+                        Ok(HostValue::from(arguments.number(0)? + 1.))
+                    }),
+                )
+                .expect("valid module"),
+        );
+        let options = ViewLoadOptions::new(root.clone(), "main.js", policy.clone());
+        let window = cx.add_window(|_, _| Empty);
+        let mut context = VisualTestContext::from_window(*window.deref(), cx);
+        let mut loaded = context
+            .update(|window, cx| runtime.load_view(options, window, cx))
+            .expect("load embedded view");
+        let view = loaded.view().clone();
+
+        draw(&mut context, &view);
+        assert_eq!(runtime.entities().len(), 1);
+        assert!(!root.join("gpui.d.ts").exists());
+
+        context.update(|_, cx| loaded.unload(cx));
+
+        assert!(loaded.is_unloaded());
+        assert!(runtime.entities().is_empty());
+        assert!(context.update(|_, cx| view.read(cx).snapshot().is_none()));
+        assert!(policy.modules().get("calculator").is_err());
     }
 
     #[gpui::test]

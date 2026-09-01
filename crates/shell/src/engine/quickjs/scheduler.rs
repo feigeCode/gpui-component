@@ -1195,6 +1195,7 @@ pub(super) fn awaiting<'js, T>(
     ctx: &Ctx<'js>,
     api: &'static str,
     work: impl Future<Output = Result<T, String>> + Send + 'static,
+    cancel: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
 ) -> JsResult<Promise<'js>>
 where
     T: for<'a> IntoJs<'a> + Send + 'static,
@@ -1202,15 +1203,17 @@ where
     let host = host(ctx, api)?;
     let (promise, resolve, reject) = ctx.promise()?;
 
-    let task = register(
-        ctx,
-        TaskState::new(
-            api,
-            scope::current_view().map(|view| view.downgrade()),
-            Some(Persistent::save(ctx, resolve)),
-        )
-        .with_rejection(Persistent::save(ctx, reject)),
-    )?;
+    let state = TaskState::new(
+        api,
+        scope::current_view().map(|view| view.downgrade()),
+        Some(Persistent::save(ctx, resolve)),
+    )
+    .with_rejection(Persistent::save(ctx, reject));
+    let state = match cancel {
+        Some(cancel) => state.with_cancellation(move || cancel()),
+        None => state,
+    };
+    let task = register(ctx, state)?;
 
     let running = task.clone();
     host.foreground

@@ -105,6 +105,7 @@
 
 use std::{
     cell::Cell, collections::BTreeMap, fmt, fmt::Write as _, future::Future, pin::Pin, rc::Rc,
+    sync::Arc,
 };
 
 use crate::component::ComponentFactory;
@@ -404,9 +405,48 @@ type HostFunction = Rc<dyn Fn(&HostArguments) -> HostResult>;
 /// the `App` was copied out before it was built.
 pub type HostFuture = Pin<Box<dyn Future<Output = HostResult> + Send>>;
 
+/// Asynchronous host work with an optional action that stops its underlying operation.
+pub struct HostAsyncTask {
+    future: HostFuture,
+    cancel: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl HostAsyncTask {
+    pub fn new<F, C>(future: F, cancel: C) -> Self
+    where
+        F: Future<Output = HostResult> + Send + 'static,
+        C: Fn() + Send + Sync + 'static,
+    {
+        Self {
+            future: Box::pin(future),
+            cancel: Some(Arc::new(cancel)),
+        }
+    }
+
+    fn without_cancel<F>(future: F) -> Self
+    where
+        F: Future<Output = HostResult> + Send + 'static,
+    {
+        Self {
+            future: Box::pin(future),
+            cancel: None,
+        }
+    }
+
+    pub fn cancel(&self) {
+        if let Some(cancel) = &self.cancel {
+            cancel();
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (HostFuture, Option<Arc<dyn Fn() + Send + Sync>>) {
+        (self.future, self.cancel)
+    }
+}
+
 /// Builds one asynchronous call. Fallible so that argument checking can refuse
 /// before any work is scheduled.
-type HostAsyncFunction = Rc<dyn Fn(&HostArguments) -> Result<HostFuture, HostError>>;
+type HostAsyncFunction = Rc<dyn Fn(&HostArguments) -> Result<HostAsyncTask, HostError>>;
 
 /// One registered module: a name and the functions under it.
 #[derive(Clone)]
@@ -562,9 +602,21 @@ impl HostModule {
             name,
             Rc::new(move |arguments| {
                 let future = body(arguments)?;
-                Ok(Box::pin(future) as HostFuture)
+                Ok(HostAsyncTask::without_cancel(future))
             }),
         );
+        self
+    }
+
+    /// Registers asynchronous work whose underlying operation can be cancelled.
+    pub fn cancellable_async_function(
+        mut self,
+        name: impl Into<String>,
+        body: impl Fn(&HostArguments) -> Result<HostAsyncTask, HostError> + 'static,
+    ) -> Self {
+        let name = name.into();
+        self.functions.remove(&name);
+        self.async_functions.insert(name, Rc::new(body));
         self
     }
 
@@ -732,7 +784,7 @@ impl HostModule {
         &self,
         function: &str,
         arguments: &HostArguments,
-    ) -> Result<HostFuture, HostError> {
+    ) -> Result<HostAsyncTask, HostError> {
         let Some(body) = self.async_functions.get(function) else {
             return Err(self.no_such_function(function));
         };
@@ -974,7 +1026,7 @@ pub(crate) fn dispatch_async(
     module: &str,
     function: &str,
     arguments: &HostArguments,
-) -> Result<HostFuture, HostError> {
+) -> Result<HostAsyncTask, HostError> {
     if IN_CALL.with(Cell::get) {
         return Err(HostError::new(format!(
             "`{module}.{function}` was reached from inside another host call: \
@@ -1007,6 +1059,10 @@ impl Drop for CallGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
 
     fn registry() -> HostModules {
         let mut modules = HostModules::new();
@@ -1046,6 +1102,26 @@ mod tests {
                 .unwrap(),
             HostValue::Number(2.)
         );
+    }
+
+    #[test]
+    fn cancellable_async_function_exposes_its_cancel_action() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_for_task = Arc::clone(&cancelled);
+        let module = HostModule::new("work").cancellable_async_function("run", move |_| {
+            let cancelled = Arc::clone(&cancelled_for_task);
+            Ok(HostAsyncTask::new(
+                async { Ok(HostValue::Null) },
+                move || cancelled.store(true, Ordering::SeqCst),
+            ))
+        });
+
+        let task = module
+            .begin("run", &HostArguments::default())
+            .expect("build task");
+        task.cancel();
+
+        assert!(cancelled.load(Ordering::SeqCst));
     }
 
     #[test]

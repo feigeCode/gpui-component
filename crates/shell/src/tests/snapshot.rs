@@ -566,7 +566,7 @@ fn a_palette_change_rebuilds_the_snapshot(cx: &mut TestAppContext) {
     // baked into the snapshot. Repainting cannot pick up a new palette; only a
     // rebuild can.
     context.update(|_, cx| {
-        gpui_base::Theme::global_mut(cx).tokens.colors.background = gpui::white();
+        gpui_base::Theme::global_mut(cx).tokens.colors.background = gpui::black();
     });
     render_once(&mut context, &view);
 

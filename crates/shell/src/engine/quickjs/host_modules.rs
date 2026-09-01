@@ -150,11 +150,17 @@ fn host_async_call<'js>(
         Exception::throw_message(&ctx, &format!("`{module}.{function}`: {error}"))
     })?;
 
-    scheduler::awaiting(&ctx, ASYNC_API, async move {
-        work.await
-            .map(Bridged)
-            .map_err(|error| format!("`{module}.{function}`: {error}"))
-    })
+    let (work, cancel) = work.into_parts();
+    scheduler::awaiting(
+        &ctx,
+        ASYNC_API,
+        async move {
+            work.await
+                .map(Bridged)
+                .map_err(|error| format!("`{module}.{function}`: {error}"))
+        },
+        cancel,
+    )
 }
 
 /// What an asynchronous host call is called in task diagnostics.

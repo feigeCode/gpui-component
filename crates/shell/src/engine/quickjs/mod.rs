@@ -810,8 +810,17 @@ impl ShellRuntime {
     /// its own files and the built-in modules, and nothing else. That is
     /// the first half of the sandbox's module policy (design doc §19.1).
     pub(crate) fn load_app(self: &Rc<Self>, dir: &Path, entry: &str) -> Result<ViewType> {
+        self.load_app_with_options(dir, entry, true)
+    }
+
+    pub(crate) fn load_app_with_options(
+        self: &Rc<Self>,
+        dir: &Path,
+        entry: &str,
+        write_type_declarations: bool,
+    ) -> Result<ViewType> {
         let root = crate::runtime::resolve_app_root(dir, entry)?;
-        if let Err(error) = crate::write_type_declarations(&root) {
+        if write_type_declarations && let Err(error) = crate::write_type_declarations(&root) {
             tracing::debug!(
                 "could not update declarations in {}: {error}",
                 root.display()
@@ -6230,6 +6239,15 @@ impl ShellRuntime {
                     ));
                 }
                 if name == "href" {
+                    if !scope::policy()
+                        .embedding_profile()
+                        .has_application_authority()
+                    {
+                        return Err(Exception::throw_type(
+                            ctx,
+                            "href(url) is unavailable under the contained embedding profile",
+                        ));
+                    }
                     let Some(target) = bridged.first().and_then(|value| value.as_str().ok()) else {
                         return Err(Exception::throw_type(ctx, "href(url) expects a string"));
                     };

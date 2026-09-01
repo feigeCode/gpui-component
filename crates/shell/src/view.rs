@@ -207,7 +207,13 @@ impl ScriptView {
     }
 
     pub fn is_dirty(&self) -> bool {
-        !self.retired && self.dirty
+        !self.retired && self.application_is_active() && self.dirty
+    }
+
+    fn application_is_active(&self) -> bool {
+        self.object
+            .application_generation()
+            .is_none_or(|application| application.is_active())
     }
 
     /// Makes a retained entity inert before its store handle is removed.
@@ -284,7 +290,7 @@ impl Drop for ScriptView {
 
 impl Render for ScriptView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.retired {
+        if self.retired || !self.application_is_active() {
             return div().into_any_element();
         }
         let tokens = crate::theme_tokens::sync(cx);

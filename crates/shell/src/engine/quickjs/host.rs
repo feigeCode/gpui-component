@@ -112,6 +112,15 @@ pub fn install(_ctx: &Ctx<'_>, module: &Object<'_>) -> JsResult<()> {
 /// hand an arbitrary URI to whatever handler the desktop has registered for
 /// its scheme, which is a considerably larger thing than opening a page.
 fn open_url(ctx: Ctx<'_>, url: String) -> JsResult<()> {
+    if !crate::scope::policy()
+        .embedding_profile()
+        .has_application_authority()
+    {
+        return Err(Exception::throw_type(
+            &ctx,
+            "cx.open_url(url) is unavailable under the contained embedding profile",
+        ));
+    }
     let valid = reqwest::Url::parse(&url).is_ok_and(|parsed| {
         matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some()
     });
