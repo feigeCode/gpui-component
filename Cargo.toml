@@ -27,6 +27,7 @@ members = [
   "examples/table_in_scrollable",
   "examples/markdown_table",
   "crates/shell",
+  "crates/component-shell",
 ]
 resolver = "2"
 
@@ -46,6 +47,7 @@ gpui-component-assets = { package = "gpui_ce_components_assets", path = "crates/
 gpui-fps = { package = "gpui_ce_components_fps", path = "crates/fps", version = "0.2.0" }
 gpui-shell = { package = "gpui_ce_components_shell", path = "crates/shell", version = "0.2.0" }
 gpui-wry = { package = "gpui_ce_components_webview", path = "crates/webview", version = "0.2.0" }
+gpui-component-shell = { path = "crates/component-shell", version = "0.1.0" }
 story = { path = "crates/story" }
 
 gpui = { package = "gpui_ce", git = "https://github.com/feigeCode/gpui-ce.git", rev = "c13e489375c7cd93838bdabef0213771bc2fe456", version = "0.2.2" }

@@ -39,25 +39,19 @@ gpui_platform.workspace = true
 gpui-base = { workspace = true, features = ["inspector"] }
 gpui-fps.workspace = true
 
-rquickjs = { version = "0.11", features = [
+rquickjs = { version = "0.12", features = [
   "macro",
   "loader",
   "classes",
   "properties",
 ], optional = true }
-# 0.8.1-beta is the newest LLRT series available on crates.io. Keep all
-# modules on that published release so the shell itself can be published.
-llrt_buffer = { version = "0.8.1-beta", optional = true }
-# Use LLRT's Ring provider instead of its vulnerable default RustCrypto/RSA
-# implementation.
-llrt_crypto = { version = "0.8.1-beta", default-features = false, features = [
-  "crypto-ring",
-], optional = true }
-llrt_path = { version = "0.8.1-beta", optional = true }
-llrt_url = { version = "0.8.1-beta", optional = true }
-llrt_zlib = { version = "0.8.1-beta", default-features = false, features = [
-  "compression-rust",
-], optional = true }
+# LLRT is still pre-release. Keep every module on the same audited revision;
+# crates.io's 0.8.1-beta release uses rquickjs 0.11 and cannot share our VM.
+llrt_buffer = { git = "https://github.com/awslabs/llrt", rev = "7b95c82a9b15e7ddfb2778eca4b5a63111e74f51", optional = true }
+llrt_crypto = { git = "https://github.com/awslabs/llrt", rev = "7b95c82a9b15e7ddfb2778eca4b5a63111e74f51", default-features = false, features = ["crypto-rust"], optional = true }
+llrt_path = { git = "https://github.com/awslabs/llrt", rev = "7b95c82a9b15e7ddfb2778eca4b5a63111e74f51", optional = true }
+llrt_url = { git = "https://github.com/awslabs/llrt", rev = "7b95c82a9b15e7ddfb2778eca4b5a63111e74f51", optional = true }
+llrt_zlib = { git = "https://github.com/awslabs/llrt", rev = "7b95c82a9b15e7ddfb2778eca4b5a63111e74f51", default-features = false, features = ["compression-rust"], optional = true }
 # The date type `gpui_base::Date` is built from, for the calendar binding. Same
 # version as `gpui-base`'s, because the two exchange `NaiveDate` values.
 chrono = "0.4.38"
