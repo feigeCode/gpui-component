@@ -1752,56 +1752,10 @@ fn default_data_home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EmbeddingProfile, HostModule, HostValue};
+    use crate::{HostModule, HostValue};
     use gpui::{TestAppContext, VisualTestContext};
     use std::ops::Deref as _;
     use std::sync::atomic::{AtomicU64, Ordering};
-
-    const CONTAINED_AUTHORITY_PROBES: &[(&str, &str)] = &[
-        (
-            "bind-keys",
-            r#"
-                import { View } from "gpui";
-                export default class Probe extends View {
-                  init(_props, cx) {
-                    cx.bind_keys([{ keystroke: "ctrl-alt-y", action: "probe" }]);
-                  }
-                  render() { return null; }
-                }
-            "#,
-        ),
-        (
-            "open-url",
-            r#"
-                import { View } from "gpui";
-                export default class Probe extends View {
-                  init(_props, cx) { cx.open_url("https://example.com"); }
-                  render() { return null; }
-                }
-            "#,
-        ),
-        (
-            "window-mutation",
-            r#"
-                import { View } from "gpui";
-                export default class Probe extends View {
-                  init() { window.minimize_window(); }
-                  render() { return null; }
-                }
-            "#,
-        ),
-        (
-            "link-navigation",
-            r#"
-                import { View } from "gpui";
-                import { Link } from "gpui-base";
-                export default class Probe extends View {
-                  init() { Link.new("outside").href("https://example.com"); }
-                  render() { return null; }
-                }
-            "#,
-        ),
-    ];
 
     const VALID: &str = r#"{
         "id": "com.example.inbox",
@@ -1947,28 +1901,6 @@ mod tests {
     }
 
     #[gpui::test]
-    fn contained_embedded_views_refuse_application_authority(cx: &mut TestAppContext) {
-        cx.update(crate::init);
-        let runtime = ShellRuntime::new_isolated().expect("runtime");
-        cx.update(|cx| runtime.set_global(cx));
-        let tree = TempTree::new("contained-authority");
-        let window = cx.add_window(|_, _| Empty);
-        let mut context = VisualTestContext::from_window(*window.deref(), cx);
-
-        for (name, source) in CONTAINED_AUTHORITY_PROBES {
-            let root = tree.path().join(name);
-            std::fs::create_dir_all(&root).expect("create probe directory");
-            std::fs::write(root.join("main.js"), source).expect("write probe");
-            let policy = Rc::new(Policy::new().with_embedding_profile(EmbeddingProfile::Contained));
-            let options = ViewLoadOptions::new(root, "main.js", policy);
-            let result = context.update(|window, cx| runtime.load_view(options, window, cx));
-
-            let error = result.expect_err("contained view must refuse host authority");
-            assert!(error.to_string().contains("contained"), "{name}: {error}");
-        }
-    }
-
-    #[gpui::test]
     fn embedded_view_unload_retires_view_and_revokes_modules(cx: &mut TestAppContext) {
         cx.update(crate::init);
         let runtime = ShellRuntime::new_isolated().expect("runtime");
@@ -1991,7 +1923,6 @@ mod tests {
         .expect("write plugin");
         let policy = Rc::new(
             Policy::new()
-                .with_embedding_profile(EmbeddingProfile::Contained)
                 .with_host_module(
                     HostModule::new("calculator").function("increment", |arguments| {
                         Ok(HostValue::from(arguments.number(0)? + 1.))

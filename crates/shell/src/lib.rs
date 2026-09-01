@@ -112,7 +112,6 @@ pub use host_modules::{
 };
 pub use metrics::RuntimeMetrics;
 pub use plugin::{LoadedScriptView, ViewLoadOptions};
-pub use policy::EmbeddingProfile;
 pub use root::{DialogOptions, ShellRoot, ToastLevel, ToastRequest};
 pub use runtime::{
     ExitHandler, ExitRequest, clear_exit_handler, failure_surface, on_exit_request,

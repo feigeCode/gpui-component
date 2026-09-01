@@ -173,7 +173,6 @@ pub(super) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
 /// element it reaches is the `context` predicate's job, matched against the
 /// `key_context(...)` an element declares.
 fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
-    require_application_authority(&ctx, "cx.bind_keys()")?;
     let phase = scope::current_phase();
     if !phase.is_some_and(ScopePhase::allows_notify) {
         return Err(Exception::throw_type(
@@ -318,7 +317,6 @@ fn read<R>(ctx: &Ctx<'_>, api: &str, body: impl FnOnce(&Window) -> R) -> JsResul
 
 /// A change to the window, refused during a render pass.
 fn write(ctx: &Ctx<'_>, api: &str, body: impl FnOnce(&mut Window, &mut gpui::App)) -> JsResult<()> {
-    require_application_authority(ctx, api)?;
     let phase = scope::current_phase();
     if !phase.is_some_and(ScopePhase::allows_notify) {
         return Err(Exception::throw_type(
@@ -337,19 +335,6 @@ fn write(ctx: &Ctx<'_>, api: &str, body: impl FnOnce(&mut Window, &mut gpui::App
             &format!("{api} needs a live host call; call it from an event handler or a task"),
         )
     })
-}
-
-fn require_application_authority(ctx: &Ctx<'_>, api: &str) -> JsResult<()> {
-    if scope::policy()
-        .embedding_profile()
-        .has_application_authority()
-    {
-        return Ok(());
-    }
-    Err(Exception::throw_type(
-        ctx,
-        &format!("{api} is unavailable under the contained embedding profile"),
-    ))
 }
 
 #[cfg(test)]

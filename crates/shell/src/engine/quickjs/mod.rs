@@ -7891,15 +7891,6 @@ impl ShellRuntime {
                     ));
                 }
                 if name == "href" {
-                    if !scope::policy()
-                        .embedding_profile()
-                        .has_application_authority()
-                    {
-                        return Err(Exception::throw_type(
-                            ctx,
-                            "href(url) is unavailable under the contained embedding profile",
-                        ));
-                    }
                     let Some(target) = bridged.first().and_then(|value| value.as_str().ok()) else {
                         return Err(Exception::throw_type(ctx, "href(url) expects a string"));
                     };

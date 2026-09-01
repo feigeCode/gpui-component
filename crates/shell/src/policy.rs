@@ -54,22 +54,6 @@ use crate::{
 /// The application name a policy carries when the host named none.
 const DEFAULT_APPLICATION: &str = "app";
 
-/// How much authority a script has over the application that embeds it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum EmbeddingProfile {
-    /// A standalone shell application owns its window and application commands.
-    #[default]
-    Application,
-    /// An embedded view may render and handle local input, but not control its host.
-    Contained,
-}
-
-impl EmbeddingProfile {
-    pub(crate) fn has_application_authority(self) -> bool {
-        self == Self::Application
-    }
-}
-
 /// The authority one application or plugin runs under.
 ///
 /// Built once by the host and shared by handle: a view holds one, a call frame
@@ -85,7 +69,6 @@ pub struct Policy {
     /// answers "under whose authority?"; "filed under whose name?" is the same
     /// question asked of persistence.
     application: Rc<str>,
-    embedding_profile: EmbeddingProfile,
     capabilities: Capabilities,
     /// A live handle, not a value — and deliberately unlike `capabilities`.
     ///
@@ -129,7 +112,6 @@ impl Policy {
     pub fn new() -> Self {
         Self {
             application: Rc::from(DEFAULT_APPLICATION),
-            embedding_profile: EmbeddingProfile::default(),
             capabilities: Capabilities::default(),
             modules: Rc::new(RefCell::new(Rc::new(HostModules::default()))),
             store: Rc::new(RefCell::new(None)),
@@ -156,15 +138,6 @@ impl Policy {
     /// The name this application's panels are filed under.
     pub fn application(&self) -> &str {
         &self.application
-    }
-
-    pub fn with_embedding_profile(mut self, profile: EmbeddingProfile) -> Self {
-        self.embedding_profile = profile;
-        self
-    }
-
-    pub fn embedding_profile(&self) -> EmbeddingProfile {
-        self.embedding_profile
     }
 
     pub fn with_capabilities(mut self, capabilities: Capabilities) -> Self {
@@ -294,7 +267,6 @@ impl Policy {
             // panels are filed under, and a copy that renamed them would lose
             // the layout the user had.
             application: self.application.clone(),
-            embedding_profile: self.embedding_profile,
             capabilities: self.capabilities.clone(),
             modules: self.modules.clone(),
             store: self.store.clone(),
@@ -321,19 +293,6 @@ mod tests {
 
         assert!(plugin.capabilities().has_read_access());
         assert!(!application.capabilities().has_read_access());
-    }
-
-    #[test]
-    fn embedding_profile_is_frozen_with_the_policy() {
-        let contained = Policy::new().with_embedding_profile(EmbeddingProfile::Contained);
-        let duplicate = contained.duplicate();
-
-        assert_eq!(EmbeddingProfile::Contained, contained.embedding_profile());
-        assert_eq!(EmbeddingProfile::Contained, duplicate.embedding_profile());
-        assert_eq!(
-            EmbeddingProfile::Application,
-            Policy::new().embedding_profile()
-        );
     }
 
     /// Editing the default while a view holds it must not change what that view
