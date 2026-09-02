@@ -202,6 +202,7 @@ pub struct Button {
     border_edges: Edges<bool>,
     dropdown_caret: bool,
     hover_group: Option<SharedString>,
+    hover_group_held: bool,
     size: Size,
     glyph_size: Option<IconSize>,
     compact: bool,
@@ -263,6 +264,7 @@ impl Button {
             loading_icon: None,
             dropdown_caret: false,
             hover_group: None,
+            hover_group_held: false,
             tab_index: 0,
             tab_stop: true,
         }
@@ -314,6 +316,13 @@ impl Button {
     /// button reads as one control with the hovered part emphasized.
     pub(crate) fn hover_group(mut self, group: impl Into<SharedString>) -> Self {
         self.hover_group = Some(group.into());
+        self
+    }
+
+    /// Keep the hover group's idle surface up without a pointer, for as long as
+    /// the group is held engaged, such as while a sibling's menu is open.
+    pub(crate) fn hover_group_held(mut self, held: bool) -> Self {
+        self.hover_group_held = held;
         self
     }
 
@@ -538,6 +547,7 @@ impl RenderOnce for Button {
         let disabled = self.disabled;
         let loading = self.loading;
         let hover_group = self.hover_group;
+        let hover_group_held = self.hover_group_held;
         let mut base = self.base;
         let children = self.children;
         let instance_style = base.style().clone();
@@ -650,8 +660,9 @@ impl RenderOnce for Button {
                                 .text_color(active_style.fg)
                         })
                         .when_some(hover_group, |this, group| {
-                            let hover_style = style.hovered(self.outline, cx);
-                            this.group_hover(group, |this| this.bg(hover_style.bg.opacity(0.5)))
+                            let idle_bg = style.hovered(self.outline, cx).bg.opacity(0.5);
+                            this.when(hover_group_held, |this| this.bg(idle_bg))
+                                .group_hover(group, |this| this.bg(idle_bg))
                         })
                     })
             })
