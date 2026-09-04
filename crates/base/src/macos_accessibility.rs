@@ -40,7 +40,13 @@ extern "C" fn hit_test_forwarder(this: &NSWindow, _cmd: Sel, point: NSPoint) -> 
 }
 
 fn ns_view(window: &Window) -> Option<&NSView> {
-    let handle = HasWindowHandle::window_handle(window).ok()?;
+    // GPUI TestWindow 的 window_handle 会 unimplemented!，此处以 catch_unwind
+    // 防护：测试窗口没有真实 NSView，直接返回 None 跳过 forwarder 安装。
+    let handle = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        HasWindowHandle::window_handle(window)
+    }))
+    .ok()?
+    .ok()?;
     let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
         return None;
     };
