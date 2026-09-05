@@ -49,7 +49,7 @@ use gpui::{
     AppContext as _, Bounds, Context, IntoElement, MouseButton, ParentElement, Pixels, Render,
     SharedString, StatefulInteractiveElement, Styled as _, Window,
 };
-use gpui_base::{ElementExt as _, Theme, Tooltip, TooltipRequest};
+use gpui_base::{Theme, Tooltip, TooltipRequest};
 
 use crate::{materialize::Behavior, root::ShellRoot, spec::Component};
 
@@ -106,8 +106,7 @@ where
     let trigger_bounds: Rc<Cell<Bounds<Pixels>>> = Rc::new(Cell::new(Bounds::default()));
     let writer = Rc::clone(&trigger_bounds);
 
-    element
-        .on_prepaint(move |bounds, _, _| writer.set(bounds))
+    gpui_base::ElementExt::on_prepaint(element, move |bounds, _, _| writer.set(bounds))
         .on_hover(move |hovered, window, cx| {
             let Some(overlay) = ShellRoot::tooltip_overlay(window, cx) else {
                 // No overlay layer means the window's first view is not a

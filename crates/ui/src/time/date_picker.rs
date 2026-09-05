@@ -20,7 +20,7 @@ use crate::{
 };
 
 use super::calendar::{Calendar, CalendarEvent, CalendarState, Date, Matcher};
-use gpui_base::{DatePicker as BaseDatePicker, ElementExt as _};
+use gpui_base::DatePicker as BaseDatePicker;
 
 const CONTEXT: &'static str = "DatePicker";
 pub(crate) fn init(cx: &mut App) {
@@ -411,151 +411,153 @@ impl RenderOnce for DatePicker {
 
         let picker_state = self.state.clone();
 
-        BaseDatePicker::new(self.id, &state.focus_handle)
-            .open(state.open)
-            .disabled(self.disabled)
-            .on_open_change(move |open, window, cx| {
-                picker_state.update(cx, |state, cx| {
-                    if !open {
-                        state.focus_back_if_need(window, cx);
-                    }
-                    state.open = open;
-                    cx.notify();
-                });
-            })
-            .key_context(CONTEXT)
-            .on_action(window.listener_for(&self.state, DatePickerState::on_delete))
-            .flex_none()
-            .w_full()
-            .relative()
-            .on_prepaint({
+        gpui_base::ElementExt::on_prepaint(
+            BaseDatePicker::new(self.id, &state.focus_handle)
+                .open(state.open)
+                .disabled(self.disabled)
+                .on_open_change(move |open, window, cx| {
+                    picker_state.update(cx, |state, cx| {
+                        if !open {
+                            state.focus_back_if_need(window, cx);
+                        }
+                        state.open = open;
+                        cx.notify();
+                    });
+                })
+                .key_context(CONTEXT)
+                .on_action(window.listener_for(&self.state, DatePickerState::on_delete))
+                .flex_none()
+                .w_full()
+                .relative(),
+            {
                 let state = self.state.clone();
                 move |bounds, _, cx| state.update(cx, |state, _| state.bounds = bounds)
-            })
-            .input_text_size(self.size)
-            .refine_style(&self.style)
-            .child(
-                div()
-                    .id("date-picker-input")
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .when(self.appearance, |this| {
-                        this.bg(bg)
-                            .text_color(fg)
-                            .when(self.disabled, |this| this.opacity(0.5))
-                            .border_1()
-                            .border_color(cx.theme().input)
-                            .rounded(cx.theme().radius)
-                            .when(is_focused, |this| {
-                                this.border_1().border_color(cx.theme().ring)
-                            })
-                    })
-                    .when(
-                        is_focused && self.appearance && !self.disabled && self.focus_ring_enabled,
-                        |this| this.focus_ring_style(window, cx),
+            },
+        )
+        .input_text_size(self.size)
+        .refine_style(&self.style)
+        .child(
+            div()
+                .id("date-picker-input")
+                .relative()
+                .flex()
+                .items_center()
+                .justify_between()
+                .when(self.appearance, |this| {
+                    this.bg(bg)
+                        .text_color(fg)
+                        .when(self.disabled, |this| this.opacity(0.5))
+                        .border_1()
+                        .border_color(cx.theme().input)
+                        .rounded(cx.theme().radius)
+                        .when(is_focused, |this| {
+                            this.border_1().border_color(cx.theme().ring)
+                        })
+                })
+                .when(
+                    is_focused && self.appearance && !self.disabled && self.focus_ring_enabled,
+                    |this| this.focus_ring_style(window, cx),
+                )
+                .input_text_size(self.size)
+                .input_size(self.size)
+                .when(!state.open && !self.disabled, |this| {
+                    this.on_click(
+                        window.listener_for(&self.state, DatePickerState::toggle_calendar),
                     )
-                    .input_text_size(self.size)
-                    .input_size(self.size)
-                    .when(!state.open && !self.disabled, |this| {
-                        this.on_click(
-                            window.listener_for(&self.state, DatePickerState::toggle_calendar),
+                })
+                .child(
+                    h_flex()
+                        .w_full()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .items_center()
+                        .justify_between()
+                        .gap_1()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .truncate()
+                                .when(!state.date.is_some(), |this| {
+                                    this.text_color(cx.theme().muted_foreground)
+                                })
+                                .child(display_title),
                         )
-                    })
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .items_center()
-                            .justify_between()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .truncate()
-                                    .when(!state.date.is_some(), |this| {
-                                        this.text_color(cx.theme().muted_foreground)
-                                    })
-                                    .child(display_title),
-                            )
-                            .when(!self.disabled, |this| {
-                                this.when(show_clean, |this| {
-                                    this.child(clear_button(cx).on_click(
-                                        window.listener_for(&self.state, DatePickerState::clean),
+                        .when(!self.disabled, |this| {
+                            this.when(show_clean, |this| {
+                                this.child(clear_button(cx).on_click(
+                                    window.listener_for(&self.state, DatePickerState::clean),
+                                ))
+                            })
+                            .when(!show_clean, |this| {
+                                this.child(
+                                    Icon::new(IconName::Calendar)
+                                        .xsmall()
+                                        .text_color(cx.theme().muted_foreground),
+                                )
+                            })
+                        }),
+                ),
+        )
+        .when(state.open, |this| {
+            this.child(
+                deferred(crate::popover::dropdown_popup(
+                    ("date-picker-popup", self.state.entity_id()),
+                    state.bounds,
+                    div()
+                        .occlude()
+                        .p_3()
+                        .popover_style(cx)
+                        .on_mouse_up_out(
+                            MouseButton::Left,
+                            window.listener_for(&self.state, |view, _, window, cx| {
+                                view.on_escape(&Cancel, window, cx);
+                            }),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .h_full()
+                                .items_start()
+                                .when_some(self.presets.clone(), |this, presets| {
+                                    this.child(v_flex().my_1().gap_2().justify_end().children(
+                                        presets.into_iter().enumerate().map(|(i, preset)| {
+                                            Button::new(("preset", i))
+                                                .small()
+                                                .ghost()
+                                                .tab_stop(false)
+                                                .label(preset.label.clone())
+                                                .on_click(window.listener_for(
+                                                    &self.state,
+                                                    move |this, _, window, cx| {
+                                                        this.select_preset(&preset, window, cx);
+                                                    },
+                                                ))
+                                        }),
                                     ))
                                 })
-                                .when(!show_clean, |this| {
-                                    this.child(
-                                        Icon::new(IconName::Calendar)
-                                            .xsmall()
-                                            .text_color(cx.theme().muted_foreground),
-                                    )
-                                })
-                            }),
-                    ),
+                                .child(
+                                    Calendar::new(&state.calendar)
+                                        .number_of_months(self.number_of_months)
+                                        .first_day_of_week(state.first_day_of_week)
+                                        .border_0()
+                                        .rounded_none()
+                                        .p_0()
+                                        .map(|this| match self.size {
+                                            Size::Small => this.w(px(196.) * month_count),
+                                            Size::Large => this.w(px(280.) * month_count),
+                                            _ => this.w(px(224.) * month_count),
+                                        })
+                                        .with_size(self.size),
+                                ),
+                        ),
+                    cx,
+                ))
+                .with_priority(gpui_base::POPUP_PRIORITY),
             )
-            .when(state.open, |this| {
-                this.child(
-                    deferred(crate::popover::dropdown_popup(
-                        ("date-picker-popup", self.state.entity_id()),
-                        state.bounds,
-                        div()
-                            .occlude()
-                            .p_3()
-                            .popover_style(cx)
-                            .on_mouse_up_out(
-                                MouseButton::Left,
-                                window.listener_for(&self.state, |view, _, window, cx| {
-                                    view.on_escape(&Cancel, window, cx);
-                                }),
-                            )
-                            .child(
-                                h_flex()
-                                    .gap_3()
-                                    .h_full()
-                                    .items_start()
-                                    .when_some(self.presets.clone(), |this, presets| {
-                                        this.child(v_flex().my_1().gap_2().justify_end().children(
-                                            presets.into_iter().enumerate().map(|(i, preset)| {
-                                                Button::new(("preset", i))
-                                                    .small()
-                                                    .ghost()
-                                                    .tab_stop(false)
-                                                    .label(preset.label.clone())
-                                                    .on_click(window.listener_for(
-                                                        &self.state,
-                                                        move |this, _, window, cx| {
-                                                            this.select_preset(&preset, window, cx);
-                                                        },
-                                                    ))
-                                            }),
-                                        ))
-                                    })
-                                    .child(
-                                        Calendar::new(&state.calendar)
-                                            .number_of_months(self.number_of_months)
-                                            .first_day_of_week(state.first_day_of_week)
-                                            .border_0()
-                                            .rounded_none()
-                                            .p_0()
-                                            .map(|this| match self.size {
-                                                Size::Small => this.w(px(196.) * month_count),
-                                                Size::Large => this.w(px(280.) * month_count),
-                                                _ => this.w(px(224.) * month_count),
-                                            })
-                                            .with_size(self.size),
-                                    ),
-                            ),
-                        cx,
-                    ))
-                    .with_priority(gpui_base::POPUP_PRIORITY),
-                )
-            })
+        })
     }
 }

@@ -8,7 +8,7 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use crate::{element_ext::ElementExt, geometry::AxisExt};
+use crate::geometry::AxisExt;
 
 /// Events emitted by the [`SliderState`].
 pub enum SliderEvent {
@@ -677,7 +677,7 @@ impl RenderOnce for SliderIndicator {
             .children(self.children)
             .on_prepaint({
                 let state = self.state;
-                move |bounds, _, cx| state.update(cx, |state, _| state.set_bounds(bounds))
+                move |payload, _, cx| state.update(cx, |state, _| state.set_bounds(payload.bounds))
             })
     }
 }

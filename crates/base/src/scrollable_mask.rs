@@ -210,7 +210,6 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
             }
 
             window.on_mouse_event({
-                let view_id = window.current_view();
                 let scroll_handle = self.scroll_handle.clone();
                 let hitbox_id = hitbox.id;
                 let ongoing_scroll = ongoing_scroll.clone();
@@ -273,7 +272,7 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
 
                         offset.y = new_offset;
                         scroll_handle.set_offset(offset);
-                        cx.notify(view_id);
+                        cx.refresh_windows();
                         cx.stop_propagation();
                         return;
                     }
@@ -287,7 +286,7 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
                     // scroll.
                     if offset != scroll_handle.offset() {
                         scroll_handle.set_offset(offset);
-                        cx.notify(view_id);
+                        cx.refresh_windows();
                         cx.stop_propagation();
                     }
                 }

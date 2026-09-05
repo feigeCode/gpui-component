@@ -516,7 +516,7 @@ impl Element for Inline {
                             );
                         });
                     }
-                    cx.notify(current_view);
+                    cx.refresh_windows();
                 }
             });
         }
@@ -536,7 +536,7 @@ impl Element for Inline {
                 //  notify update when hovering over different links
                 if current != updated {
                     hovered_index = updated;
-                    cx.notify(current_view);
+                    cx.refresh_windows();
                 }
             }
         });

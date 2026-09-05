@@ -509,7 +509,7 @@ impl RenderOnce for TabBar {
                                 this.track_scroll(&scroll_handle)
                             })
                             .when_some(bounds_rc.clone(), |this, rc| {
-                                this.on_prepaint(move |bounds, _, _| {
+                                gpui_base::ElementExt::on_prepaint(this, move |bounds, _, _| {
                                     rc.borrow_mut().container = bounds;
                                 })
                             })

@@ -2023,7 +2023,9 @@ fn flex_element(
     }
     let bounds = Rc::new(Cell::new(None::<Bounds<Pixels>>));
     let bounds_writer = Rc::clone(&bounds);
-    let mut stateful = stateful.on_prepaint(move |value, _, _| bounds_writer.set(Some(value)));
+    let mut stateful = gpui_base::ElementExt::on_prepaint(stateful, move |value, _, _| {
+        bounds_writer.set(Some(value))
+    });
     if let Some(callback) = behavior.on_mouse_move {
         let runtime = Rc::downgrade(runtime);
         let bounds = Rc::clone(&bounds);

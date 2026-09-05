@@ -6,7 +6,7 @@ use gpui::{
     StyleRefinement, Styled, Window, deferred, div, px,
 };
 
-use crate::{ElementExt as _, Positioner, StyledExt as _};
+use crate::{Positioner, StyledExt as _};
 
 /// Distance kept between a popup and the window edge.
 const WINDOW_MARGIN: Pixels = px(8.);
@@ -110,11 +110,11 @@ impl RenderOnce for Popup {
             .on_prepaint({
                 let state = state.clone();
                 let position = position.clone();
-                move |bounds, window, cx| {
-                    position.set(Self::resolved_corner(anchor, bounds));
+                move |payload, window, cx| {
+                    position.set(Self::resolved_corner(anchor, payload.bounds));
                     let first = state.update(cx, |state, _| {
                         let first = !state.captured;
-                        state.bounds = bounds;
+                        state.bounds = payload.bounds;
                         state.captured = true;
                         first
                     });

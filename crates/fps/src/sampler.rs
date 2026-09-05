@@ -49,7 +49,15 @@ impl FrameSampler {
     /// Drains the frames drawn since the previous call. Call once per rendered
     /// frame.
     pub(crate) fn tick(&mut self) {
-        let timings = self.collector.collect_unseen().into_iter().collect();
+        let timings = self
+            .collector
+            .collect_unseen()
+            .into_iter()
+            .filter_map(|event| match event {
+                gpui::profiler::FrameEvent::Draw(timing) => Some(timing),
+                gpui::profiler::FrameEvent::Present(_) => None,
+            })
+            .collect();
         self.ingest(timings, Instant::now());
     }
 

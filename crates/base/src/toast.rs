@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use crate::{
-    ElementExt as _, StyledExt as _,
+    StyledExt as _,
     motion::{Spring, spring},
 };
 
@@ -529,7 +529,8 @@ impl RenderOnce for ToastStack {
                     .when(!expanded && rank >= collapsed_visible, |this| {
                         this.invisible()
                     })
-                    .on_prepaint(move |bounds, _, cx| {
+                    .on_prepaint(move |payload, _, cx| {
+                        let bounds = payload.bounds;
                         let mut heights = measured.borrow_mut();
                         if heights.get(&measured_id).copied() != Some(bounds.size.height) {
                             heights.insert(measured_id.clone(), bounds.size.height);

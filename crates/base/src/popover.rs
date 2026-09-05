@@ -284,7 +284,6 @@ impl RenderOnce for Popover {
         let Some(trigger) = self.trigger else {
             return div().id("empty").into_any_element();
         };
-        let parent_view_id = window.current_view();
         let popup = Popup::new(self.id, trigger(open, window, cx))
             .anchor(self.anchor)
             .key_context(CONTEXT)
@@ -292,7 +291,7 @@ impl RenderOnce for Popover {
                 let state = state.clone();
                 move |_: &Confirm, window, cx| {
                     state.update(cx, |state, cx| state.toggle_open(window, cx));
-                    cx.notify(parent_view_id);
+                    cx.refresh_windows();
                 }
             })
             .on_mouse_down(self.mouse_button, {
@@ -304,7 +303,7 @@ impl RenderOnce for Popover {
                             state.toggle_open(window, cx);
                         }
                     });
-                    cx.notify(parent_view_id);
+                    cx.refresh_windows();
                 }
             });
         if !open {
@@ -330,7 +329,7 @@ impl RenderOnce for Popover {
                     let state = state.clone();
                     move |_, window, cx| {
                         state.update(cx, |state, cx| state.dismiss(window, cx));
-                        cx.notify(parent_view_id);
+                        cx.refresh_windows();
                     }
                 })
             });

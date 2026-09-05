@@ -3,7 +3,7 @@ use crate::actions::{Cancel, Confirm, SelectDown, SelectUp};
 use crate::actions::{SelectLeft, SelectRight};
 use crate::menu::menu_item::MenuItemElement;
 use crate::scroll::ScrollableElement;
-use crate::{ActiveTheme, ElementExt, Icon, IconName, Sizable as _, h_flex, v_flex};
+use crate::{ActiveTheme, Icon, IconName, Sizable as _, h_flex, v_flex};
 use crate::{Side, Size, kbd::Kbd};
 use gpui::{
     Action, Anchor, AnyElement, App, AppContext, Bounds, Context, DismissEvent, Edges, Entity,
@@ -1441,7 +1441,7 @@ impl Render for PopupMenu {
             .text_color(cx.theme().popover_foreground)
             .relative()
             .occlude()
-            .child(
+            .child(gpui_base::ElementExt::on_prepaint(
                 v_flex()
                     .id("items")
                     .p_1()
@@ -1461,9 +1461,9 @@ impl Render for PopupMenu {
                             // Ignore last separator
                             .filter(|(ix, item)| !(*ix + 1 == items_count && item.is_separator()))
                             .map(|(ix, item)| self.render_item(ix, item, options, window, cx)),
-                    )
-                    .on_prepaint(move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds)),
-            )
+                    ),
+                move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds),
+            ))
             .when(self.scrollable, |this| {
                 // TODO: When the menu is limited by `overflow_y_scroll`, the sub-menu will cannot be displayed.
                 this.vertical_scrollbar(&self.scroll_handle)

@@ -1250,13 +1250,12 @@ impl Element for Scrollbar {
                 if elapsed < motion.idle() && !inner.idle_timer_scheduled {
                     inner.idle_timer_scheduled = true;
                     let state = state.clone();
-                    let current_view = window.current_view();
                     let next_delay = motion.idle() - elapsed;
                     window
                         .spawn(cx, async move |cx| {
                             cx.background_executor().timer(next_delay).await;
                             state.set(state.get().with_idle_timer_scheduled(false));
-                            cx.update(|_, cx| cx.notify(current_view)).ok();
+                            cx.update(|_, cx| cx.refresh_windows()).ok();
                         })
                         .detach();
                 }
@@ -1533,7 +1532,7 @@ impl Element for Scrollbar {
                                         scroll_handle.offset(),
                                         Some(Instant::now()),
                                     ));
-                                    cx.notify(view_id);
+                                    cx.refresh_windows();
                                 }
                             }
                         }
@@ -1584,7 +1583,7 @@ impl Element for Scrollbar {
                                         }
                                     }
 
-                                    cx.notify(view_id);
+                                    cx.refresh_windows();
                                 }
                             }
                         });
@@ -1670,7 +1669,7 @@ impl Element for Scrollbar {
                             }
 
                             if notify {
-                                cx.notify(view_id);
+                                cx.refresh_windows();
                             }
                         }
                     });
@@ -1683,7 +1682,7 @@ impl Element for Scrollbar {
                             if phase.bubble() && state.get().dragged_axis == Some(axis) {
                                 scroll_handle.end_drag();
                                 state.set(state.get().with_unset_drag_pos(Instant::now()));
-                                cx.notify(view_id);
+                                cx.refresh_windows();
                             }
                         }
                     });
