@@ -21,15 +21,17 @@
 //! reachable.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use gpui::{Div, Entity, Stateful, Window};
+use gpui::{Bounds, Div, Entity, Pixels, SharedString, Stateful, Window};
 use ropey::Rope;
 
-use super::decorations::DecorationCollections;
+use super::decorations::{DecorationCollections, EditorAnnotations};
 use super::lsp::{ContextMenuContent, HoverDefinition, InlineCompletion};
 use crate::input::{
-    HighlightStyleResolver, InputEdit, InputHighlighter, SyntaxContext, TextDecoration,
+    GutterMarker, HighlightStyleResolver, InlineWidget, InputEdit, InputHighlighter,
+    RangeDecoration, SyntaxContext, TextDecoration,
 };
 use crate::input::{HoverPopoverState, Lsp};
 use gpui::Task;
@@ -114,6 +116,36 @@ pub trait InputExtras: Default + 'static {
     /// What this mode can offer its context menu: go-to-definition, code actions.
     fn context_menu_capabilities(&self) -> (bool, bool) {
         (false, false)
+    }
+
+    /// Feature-owned gutter markers anchored to logical rows.
+    fn gutter_markers(&self) -> &[GutterMarker] {
+        &[]
+    }
+
+    /// Whether the gutter marker lane has ever been used and stays reserved.
+    fn gutter_lane_reserved(&self) -> bool {
+        false
+    }
+
+    /// The application-owned presentation for gutter markers, if any.
+    fn gutter_marker_renderer(&self) -> Option<crate::input::GutterMarkerRenderer> {
+        None
+    }
+
+    /// Last-paint bounds per gutter marker, keyed by marker id.
+    fn gutter_marker_bounds(&self) -> Option<Rc<RefCell<HashMap<SharedString, Bounds<Pixels>>>>> {
+        None
+    }
+
+    /// Geometric range decorations to paint.
+    fn range_decorations(&self) -> &[RangeDecoration] {
+        &[]
+    }
+
+    /// Non-document inline widgets to paint at their offsets.
+    fn inline_widgets(&self) -> &[InlineWidget] {
+        &[]
     }
 }
 
@@ -341,6 +373,7 @@ pub struct EditorExtras {
     pub(crate) hover_popover: Option<HoverPopoverState>,
     pub(crate) hover_definition: HoverDefinition,
     pub(crate) context_menu_task: Task<anyhow::Result<()>>,
+    pub(crate) annotations: EditorAnnotations,
 }
 
 impl Default for EditorExtras {
@@ -353,6 +386,7 @@ impl Default for EditorExtras {
             hover_popover: None,
             hover_definition: HoverDefinition::default(),
             context_menu_task: Task::ready(Ok(())),
+            annotations: EditorAnnotations::default(),
         }
     }
 }

@@ -50,6 +50,7 @@ impl InputModeKind for EditorMode {
         new_len: usize,
     ) {
         state.extras.decorations.adjust_for_edit(range, new_len);
+        state.extras.annotations.adjust_for_edit(range, new_len);
     }
 
     fn refresh_language_features(
@@ -250,5 +251,37 @@ impl crate::input::InputExtras for super::EditorExtras {
             self.lsp.definition_provider.is_some(),
             !self.lsp.code_action_providers.is_empty(),
         )
+    }
+
+    fn gutter_markers(&self) -> &[super::GutterMarker] {
+        &self.annotations.gutter_markers
+    }
+
+    fn gutter_lane_reserved(&self) -> bool {
+        self.annotations.gutter_lane_reserved
+    }
+
+    fn gutter_marker_renderer(&self) -> Option<super::GutterMarkerRenderer> {
+        self.annotations.gutter_marker_renderer.clone()
+    }
+
+    fn gutter_marker_bounds(
+        &self,
+    ) -> Option<
+        std::rc::Rc<
+            std::cell::RefCell<
+                std::collections::HashMap<gpui::SharedString, gpui::Bounds<gpui::Pixels>>,
+            >,
+        >,
+    > {
+        Some(self.annotations.gutter_marker_bounds.clone())
+    }
+
+    fn range_decorations(&self) -> &[super::RangeDecoration] {
+        &self.annotations.range_decorations
+    }
+
+    fn inline_widgets(&self) -> &[super::InlineWidget] {
+        &self.annotations.inline_widgets
     }
 }

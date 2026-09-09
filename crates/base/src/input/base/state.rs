@@ -121,9 +121,16 @@ actions!(
 #[derive(Clone)]
 pub enum InputEvent {
     Change,
-    PressEnter { secondary: bool, shift: bool },
+    PressEnter {
+        secondary: bool,
+        shift: bool,
+    },
     Focus,
     Blur,
+    GutterMarkerMouseDown {
+        marker_id: SharedString,
+        logical_row: usize,
+    },
 }
 
 pub(super) const CONTEXT: &str = "Input";
