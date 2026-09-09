@@ -110,6 +110,7 @@ pub use host_modules::{
     HostArguments, HostError, HostModule, HostObject, HostResult, HostValue, RESERVED_SPECIFIERS,
 };
 pub use metrics::RuntimeMetrics;
+pub use plugin::{LoadedScriptView, ViewLoadOptions};
 pub use root::{DialogOptions, ShellRoot, ToastLevel, ToastRequest};
 pub use runtime::{
     ExitHandler, ExitRequest, clear_exit_handler, failure_surface, on_exit_request,

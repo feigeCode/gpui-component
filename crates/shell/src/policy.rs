@@ -190,6 +190,10 @@ impl Policy {
         self
     }
 
+    pub(crate) fn revoke_host_modules(&self) {
+        *self.modules.borrow_mut() = Rc::new(HostModules::new());
+    }
+
     pub fn capabilities(&self) -> &Capabilities {
         &self.capabilities
     }
