@@ -107,7 +107,8 @@ pub use engine::{LoadedApplication, ShellRuntime};
 pub use error::ShellError;
 pub use gpui;
 pub use host_modules::{
-    HostArguments, HostError, HostModule, HostObject, HostResult, HostValue, RESERVED_SPECIFIERS,
+    HostArguments, HostAsyncTask, HostError, HostModule, HostObject, HostResult, HostValue,
+    RESERVED_SPECIFIERS,
 };
 pub use metrics::RuntimeMetrics;
 pub use plugin::{LoadedScriptView, ViewLoadOptions};
@@ -266,6 +267,11 @@ pub fn set_development_mode(enabled: bool) {
 /// installed too.
 pub fn init(cx: &mut App) {
     gpui_base::init(cx);
+    style::init();
+}
+
+/// Initializes shell-only infrastructure after another layer initialized gpui-base.
+pub fn init_embedded(_cx: &mut App) {
     style::init();
 }
 
