@@ -38,6 +38,7 @@ impl InputModeKind for EditorMode {
     fn reset_annotations(state: &mut InputBaseState<Self>) {
         state.extras.hover_popover = None;
         state.extras.decorations.clear();
+        state.extras.range_decorations.clear();
     }
 
     fn editing_syntax_context(state: &InputBaseState<Self>, offset: usize) -> super::SyntaxContext {
@@ -50,7 +51,10 @@ impl InputModeKind for EditorMode {
         new_len: usize,
     ) {
         state.extras.decorations.adjust_for_edit(range, new_len);
-        state.extras.annotations.adjust_for_edit(range, new_len);
+        state
+            .extras
+            .range_decorations
+            .adjust_for_edit(range, new_len);
     }
 
     fn document_did_change(state: &mut InputBaseState<Self>) {
@@ -227,6 +231,10 @@ impl crate::input::InputExtras for super::EditorExtras {
         self.decorations.iter().collect()
     }
 
+    fn range_decorations(&self, ranges: &[std::ops::Range<usize>]) -> Vec<&super::RangeDecoration> {
+        self.range_decorations.intersecting(ranges)
+    }
+
     fn semantic_token_styles(
         &self,
         text: &ropey::Rope,
@@ -259,37 +267,5 @@ impl crate::input::InputExtras for super::EditorExtras {
             self.lsp.definition_provider.is_some(),
             !self.lsp.code_action_providers.is_empty(),
         )
-    }
-
-    fn gutter_markers(&self) -> &[super::GutterMarker] {
-        &self.annotations.gutter_markers
-    }
-
-    fn gutter_lane_reserved(&self) -> bool {
-        self.annotations.gutter_lane_reserved
-    }
-
-    fn gutter_marker_renderer(&self) -> Option<super::GutterMarkerRenderer> {
-        self.annotations.gutter_marker_renderer.clone()
-    }
-
-    fn gutter_marker_bounds(
-        &self,
-    ) -> Option<
-        std::rc::Rc<
-            std::cell::RefCell<
-                std::collections::HashMap<gpui::SharedString, gpui::Bounds<gpui::Pixels>>,
-            >,
-        >,
-    > {
-        Some(self.annotations.gutter_marker_bounds.clone())
-    }
-
-    fn range_decorations(&self) -> &[super::RangeDecoration] {
-        &self.annotations.range_decorations
-    }
-
-    fn inline_widgets(&self) -> &[super::InlineWidget] {
-        &self.annotations.inline_widgets
     }
 }

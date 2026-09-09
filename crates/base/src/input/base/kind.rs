@@ -21,17 +21,16 @@
 //! reachable.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
-use gpui::{Bounds, Div, Entity, Pixels, SharedString, Stateful, Window};
+use gpui::{Div, Entity, Stateful, Window};
 use ropey::Rope;
 
 use super::decorations::{DecorationCollections, EditorAnnotations};
 use super::lsp::{ContextMenuContent, HoverDefinition, InlineCompletion};
 use crate::input::{
-    GutterMarker, HighlightStyleResolver, InlineWidget, InputEdit, InputHighlighter,
-    RangeDecoration, SyntaxContext, TextDecoration,
+    HighlightStyleResolver, InputEdit, InputHighlighter, RangeDecoration, SyntaxContext,
+    TextDecoration,
 };
 use crate::input::{HoverPopoverState, Lsp};
 use gpui::Task;
@@ -84,6 +83,11 @@ pub trait InputExtras: Default + 'static {
         Vec::new()
     }
 
+    /// Geometric decorations intersecting visible, non-folded buffer spans.
+    fn range_decorations(&self, _ranges: &[std::ops::Range<usize>]) -> Vec<&RangeDecoration> {
+        Vec::new()
+    }
+
     /// Semantic-token styles for a visible range, when an LSP supplies them.
     fn semantic_token_styles(
         &self,
@@ -116,36 +120,6 @@ pub trait InputExtras: Default + 'static {
     /// What this mode can offer its context menu: go-to-definition, code actions.
     fn context_menu_capabilities(&self) -> (bool, bool) {
         (false, false)
-    }
-
-    /// Feature-owned gutter markers anchored to logical rows.
-    fn gutter_markers(&self) -> &[GutterMarker] {
-        &[]
-    }
-
-    /// Whether the gutter marker lane has ever been used and stays reserved.
-    fn gutter_lane_reserved(&self) -> bool {
-        false
-    }
-
-    /// The application-owned presentation for gutter markers, if any.
-    fn gutter_marker_renderer(&self) -> Option<crate::input::GutterMarkerRenderer> {
-        None
-    }
-
-    /// Last-paint bounds per gutter marker, keyed by marker id.
-    fn gutter_marker_bounds(&self) -> Option<Rc<RefCell<HashMap<SharedString, Bounds<Pixels>>>>> {
-        None
-    }
-
-    /// Geometric range decorations to paint.
-    fn range_decorations(&self) -> &[RangeDecoration] {
-        &[]
-    }
-
-    /// Non-document inline widgets to paint at their offsets.
-    fn inline_widgets(&self) -> &[InlineWidget] {
-        &[]
     }
 }
 
@@ -371,6 +345,7 @@ impl InputModeKind for TextareaMode {
 pub struct EditorExtras {
     pub(crate) lsp: Lsp,
     pub(crate) decorations: DecorationCollections,
+    pub(crate) range_decorations: DecorationCollections<RangeDecoration>,
     pub(crate) inline_completion: InlineCompletion,
     pub(crate) context_menu_content: ContextMenuContent,
     pub(crate) hover_popover: Option<HoverPopoverState>,
@@ -384,6 +359,7 @@ impl Default for EditorExtras {
         Self {
             lsp: Lsp::default(),
             decorations: DecorationCollections::default(),
+            range_decorations: DecorationCollections::default(),
             inline_completion: InlineCompletion::default(),
             context_menu_content: ContextMenuContent::default(),
             hover_popover: None,

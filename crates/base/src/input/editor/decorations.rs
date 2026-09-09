@@ -1,77 +1,27 @@
 use crate::input::EditorMode;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ops::Range;
-use std::rc::Rc;
+use std::{collections::BTreeMap, ops::Range};
 
-use gpui::{
-    AnyElement, App, Bounds, Context, HighlightStyle, Hsla, Pixels, SharedString, WeakEntity,
-};
+use gpui::{App, Context, HighlightStyle, Hsla, WeakEntity};
 use ropey::Rope;
 use sum_tree::Bias;
 
 use super::{InputBaseState, RopeExt as _};
 
-/// A feature-owned marker anchored to a logical editor row.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GutterMarker {
-    id: SharedString,
-    logical_row: usize,
-    icon: SharedString,
-    tooltip: Option<SharedString>,
-    enabled: bool,
+/// Mutable bookkeeping the editor keeps alongside its renderable annotations.
+///
+/// Content revisions and the completion epoch live here rather than on the
+/// decoration collections: they describe the document, not a decoration owner.
+/// Gutter lanes and inline widgets attach their own collections separately.
+#[derive(Default)]
+pub(crate) struct EditorAnnotations {
+    /// Monotonic content revision. Selection, focus and scrolling do not change it.
+    pub(crate) document_revision: u64,
+    /// Bumped per completion request so stale responses can be dropped.
+    pub(crate) completion_epoch: u64,
 }
-
-impl GutterMarker {
-    pub fn new(
-        id: impl Into<SharedString>,
-        logical_row: usize,
-        icon: impl Into<SharedString>,
-    ) -> Self {
-        Self {
-            id: id.into(),
-            logical_row,
-            icon: icon.into(),
-            tooltip: None,
-            enabled: true,
-        }
-    }
-
-    pub fn id(&self) -> &SharedString {
-        &self.id
-    }
-
-    pub fn logical_row(&self) -> usize {
-        self.logical_row
-    }
-
-    pub fn icon(&self) -> &SharedString {
-        &self.icon
-    }
-
-    pub fn tooltip(&self) -> Option<&SharedString> {
-        self.tooltip.as_ref()
-    }
-
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
-    pub fn with_tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
-        self.tooltip = Some(tooltip.into());
-        self
-    }
-
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-}
-
-/// Application-owned presentation for a gutter marker.
-pub type GutterMarkerRenderer = std::rc::Rc<dyn Fn(&GutterMarker) -> AnyElement>;
 
 /// Geometric presentation for an editor range decoration.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RangeDecorationStyle {
     /// Fill the continuous visual range.
@@ -84,120 +34,46 @@ pub enum RangeDecorationStyle {
 /// A geometric decoration over a UTF-8 byte range.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RangeDecoration {
-    id: SharedString,
     range: Range<usize>,
     style: RangeDecorationStyle,
     color: Option<Hsla>,
 }
 
 impl RangeDecoration {
-    pub fn new(id: impl Into<SharedString>, range: Range<usize>) -> Self {
+    /// Create a frame using the editor foreground color.
+    pub fn new(range: Range<usize>) -> Self {
         Self {
-            id: id.into(),
             range,
             style: RangeDecorationStyle::default(),
             color: None,
         }
     }
 
-    pub fn id(&self) -> &SharedString {
-        &self.id
-    }
-
+    /// The half-open UTF-8 byte range supplied to this decoration.
     pub fn range(&self) -> &Range<usize> {
         &self.range
     }
 
+    /// The geometric paint style.
     pub fn style(&self) -> RangeDecorationStyle {
         self.style
     }
 
+    /// An application-owned color override, or `None` for the editor fallback.
     pub fn color(&self) -> Option<Hsla> {
         self.color
     }
 
+    /// Choose a fill or frame without changing text layout.
     pub fn with_style(mut self, style: RangeDecorationStyle) -> Self {
         self.style = style;
         self
     }
 
+    /// Override the editor foreground fallback with an application-owned color.
     pub fn with_color(mut self, color: Hsla) -> Self {
         self.color = Some(color);
         self
-    }
-}
-
-/// Non-document text painted at a UTF-8 byte offset.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct InlineWidget {
-    id: SharedString,
-    offset: usize,
-    text: SharedString,
-}
-
-impl InlineWidget {
-    pub fn new(id: impl Into<SharedString>, offset: usize, text: impl Into<SharedString>) -> Self {
-        Self {
-            id: id.into(),
-            offset,
-            text: text.into(),
-        }
-    }
-
-    pub fn id(&self) -> &SharedString {
-        &self.id
-    }
-
-    pub fn offset(&self) -> usize {
-        self.offset
-    }
-
-    pub fn text(&self) -> &SharedString {
-        &self.text
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct EditorAnnotations {
-    pub(crate) document_revision: u64,
-    pub(crate) completion_epoch: u64,
-    pub(crate) gutter_markers: Vec<GutterMarker>,
-    pub(crate) gutter_lane_reserved: bool,
-    pub(crate) gutter_marker_bounds: Rc<RefCell<HashMap<SharedString, Bounds<Pixels>>>>,
-    pub(crate) range_decorations: Vec<RangeDecoration>,
-    pub(crate) inline_widgets: Vec<InlineWidget>,
-    pub(crate) gutter_marker_renderer: Option<GutterMarkerRenderer>,
-}
-
-impl EditorAnnotations {
-    pub(crate) fn adjust_for_edit(&mut self, edited_range: &Range<usize>, inserted_len: usize) {
-        for decoration in &mut self.range_decorations {
-            decoration.range = adjust_range_for_edit(&decoration.range, edited_range, inserted_len);
-        }
-        self.range_decorations
-            .retain(|decoration| !decoration.range.is_empty());
-        for widget in &mut self.inline_widgets {
-            widget.offset = adjust_offset_for_edit(widget.offset, edited_range, inserted_len);
-        }
-    }
-}
-
-fn adjust_offset_for_edit(
-    offset: usize,
-    edited_range: &Range<usize>,
-    inserted_len: usize,
-) -> usize {
-    if offset <= edited_range.start {
-        return offset;
-    }
-    if offset < edited_range.end {
-        return edited_range.start.saturating_add(inserted_len);
-    }
-    let removed_len = edited_range.end.saturating_sub(edited_range.start);
-    if inserted_len >= removed_len {
-        offset.saturating_add(inserted_len - removed_len)
-    } else {
-        offset.saturating_sub(removed_len - inserted_len)
     }
 }
 
@@ -218,8 +94,8 @@ impl TextDecoration {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TextDecorationCollectionId(usize);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct DecorationCollectionId(usize);
 
 /// An independently managed collection of [`TextDecoration`]s.
 ///
@@ -228,7 +104,7 @@ struct TextDecorationCollectionId(usize);
 #[derive(Clone, Debug)]
 pub struct TextDecorationCollection {
     state: WeakEntity<InputBaseState<EditorMode>>,
-    id: TextDecorationCollectionId,
+    id: DecorationCollectionId,
 }
 
 impl TextDecorationCollection {
@@ -286,69 +162,281 @@ impl TextDecorationCollection {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct DecorationCollections {
-    entries: Vec<(TextDecorationCollectionId, Vec<TextDecoration>)>,
+/// An independently managed collection of geometric range decorations.
+///
+/// Clones address the same collection. Dropping a handle does not clear it; use
+/// [`Self::clear`] to empty it or [`Self::dispose`] to release it permanently.
+/// Operations on a disposed collection or a dropped editor are harmless no-ops.
+#[derive(Clone, Debug)]
+pub struct RangeDecorationCollection {
+    state: WeakEntity<InputBaseState<EditorMode>>,
+    id: DecorationCollectionId,
 }
 
-impl DecorationCollections {
-    fn create(&mut self, decorations: Vec<TextDecoration>) -> TextDecorationCollectionId {
-        let id = TextDecorationCollectionId(self.entries.len());
-        self.entries.push((id, decorations));
+impl RangeDecorationCollection {
+    /// Replace only this owner's decorations, clipping ranges to UTF-8 boundaries.
+    pub fn set(&self, decorations: Vec<RangeDecoration>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            let decorations = normalize(&state.text, decorations);
+            if state.extras.range_decorations.set(self.id, decorations) {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Append decorations, preserving their paint order.
+    pub fn append(&self, decorations: Vec<RangeDecoration>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            let decorations = normalize(&state.text, decorations);
+            if state.extras.range_decorations.append(self.id, decorations) {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Empty this collection without invalidating its handles.
+    pub fn clear(&self, cx: &mut App) {
+        self.set(Vec::new(), cx);
+    }
+
+    /// Release this collection, invalidating all of its cloned handles.
+    pub fn dispose(&self, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            if state
+                .extras
+                .range_decorations
+                .entries
+                .remove(&self.id)
+                .is_some()
+            {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Read tracked UTF-8 byte ranges in insertion order.
+    pub fn get_ranges(&self, cx: &App) -> Vec<Range<usize>> {
+        self.state
+            .read_with(cx, |state, _| {
+                state
+                    .extras
+                    .range_decorations
+                    .get(self.id)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|decoration| decoration.range.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+/// Both text styles and geometric decorations share normalization and edit affinity.
+pub(crate) trait TrackedDecoration {
+    fn range(&self) -> &Range<usize>;
+    fn range_mut(&mut self) -> &mut Range<usize>;
+}
+
+impl TrackedDecoration for TextDecoration {
+    fn range(&self) -> &Range<usize> {
+        &self.range
+    }
+    fn range_mut(&mut self) -> &mut Range<usize> {
+        &mut self.range
+    }
+}
+
+impl TrackedDecoration for RangeDecoration {
+    fn range(&self) -> &Range<usize> {
+        &self.range
+    }
+    fn range_mut(&mut self) -> &mut Range<usize> {
+        &mut self.range
+    }
+}
+
+/// A balanced interval index over stable insertion-order entries. Each midpoint
+/// stores the maximum end of its subtree, so one document-spanning decoration
+/// does not force a scan of every preceding decoration on each frame.
+struct DecorationIndex {
+    indices: Vec<usize>,
+    max_ends: Vec<usize>,
+}
+
+impl DecorationIndex {
+    fn new<T: TrackedDecoration>(decorations: &[T]) -> Self {
+        let mut indices: Vec<_> = (0..decorations.len()).collect();
+        indices.sort_unstable_by_key(|&ix| (decorations[ix].range().start, ix));
+        let mut index = Self {
+            max_ends: vec![0; indices.len()],
+            indices,
+        };
+        index.build(decorations, 0..decorations.len());
+        index
+    }
+
+    fn build<T: TrackedDecoration>(&mut self, decorations: &[T], span: Range<usize>) -> usize {
+        if span.is_empty() {
+            return 0;
+        }
+        let mid = span.start + span.len() / 2;
+        let end = decorations[self.indices[mid]]
+            .range()
+            .end
+            .max(self.build(decorations, span.start..mid))
+            .max(self.build(decorations, mid + 1..span.end));
+        self.max_ends[mid] = end;
+        end
+    }
+
+    // Returns the number of visited nodes, allowing deterministic complexity tests.
+    fn query<T: TrackedDecoration>(
+        &self,
+        decorations: &[T],
+        span: Range<usize>,
+        range: &Range<usize>,
+        matches: &mut Vec<usize>,
+    ) -> usize {
+        if span.is_empty() || range.is_empty() {
+            return 0;
+        }
+        let mid = span.start + span.len() / 2;
+        if self.max_ends[mid] <= range.start {
+            return 1;
+        }
+        let mut visited = 1 + self.query(decorations, span.start..mid, range, matches);
+        let ix = self.indices[mid];
+        let candidate = decorations[ix].range();
+        if candidate.start < range.end {
+            if candidate.end > range.start {
+                matches.push(ix);
+            }
+            visited += self.query(decorations, mid + 1..span.end, range, matches);
+        }
+        visited
+    }
+}
+
+struct DecorationEntries<T> {
+    decorations: Vec<T>,
+    index: DecorationIndex,
+}
+
+impl<T: TrackedDecoration> DecorationEntries<T> {
+    fn new(decorations: Vec<T>) -> Self {
+        let index = DecorationIndex::new(&decorations);
+        Self { decorations, index }
+    }
+
+    fn reindex(&mut self) {
+        self.index = DecorationIndex::new(&self.decorations);
+    }
+}
+
+pub(crate) struct DecorationCollections<T = TextDecoration> {
+    entries: BTreeMap<DecorationCollectionId, DecorationEntries<T>>,
+    next_id: usize,
+}
+
+impl<T> Default for DecorationCollections<T> {
+    fn default() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            next_id: 0,
+        }
+    }
+}
+
+impl<T: TrackedDecoration> DecorationCollections<T> {
+    fn create(&mut self, decorations: Vec<T>) -> DecorationCollectionId {
+        let id = DecorationCollectionId(self.next_id);
+        self.next_id += 1;
+        self.entries.insert(id, DecorationEntries::new(decorations));
         id
     }
 
-    fn set(&mut self, id: TextDecorationCollectionId, decorations: Vec<TextDecoration>) -> bool {
-        let Some((_, current)) = self
-            .entries
-            .iter_mut()
-            .find(|(entry_id, _)| *entry_id == id)
-        else {
+    fn set(&mut self, id: DecorationCollectionId, decorations: Vec<T>) -> bool {
+        let Some(current) = self.entries.get_mut(&id) else {
             return false;
         };
-        *current = decorations;
+        *current = DecorationEntries::new(decorations);
         true
     }
 
-    fn append(&mut self, id: TextDecorationCollectionId, decorations: Vec<TextDecoration>) -> bool {
-        let Some((_, current)) = self
-            .entries
-            .iter_mut()
-            .find(|(entry_id, _)| *entry_id == id)
-        else {
+    fn append(&mut self, id: DecorationCollectionId, decorations: Vec<T>) -> bool {
+        let Some(current) = self.entries.get_mut(&id) else {
             return false;
         };
-        current.extend(decorations);
+        current.decorations.extend(decorations);
+        current.reindex();
         true
     }
 
-    fn get(&self, id: TextDecorationCollectionId) -> Option<&[TextDecoration]> {
+    fn get(&self, id: DecorationCollectionId) -> Option<&[T]> {
         self.entries
-            .iter()
-            .find(|(entry_id, _)| *entry_id == id)
-            .map(|(_, decorations)| decorations.as_slice())
+            .get(&id)
+            .map(|entry| entry.decorations.as_slice())
     }
 
     pub(super) fn adjust_for_edit(&mut self, edited_range: &Range<usize>, inserted_len: usize) {
-        for (_, decorations) in &mut self.entries {
-            decorations.retain_mut(|decoration| {
-                decoration.range =
-                    adjust_range_for_edit(&decoration.range, edited_range, inserted_len);
-                !decoration.range.is_empty()
+        for entry in self.entries.values_mut() {
+            let len = entry.decorations.len();
+            if len == 0 || entry.index.max_ends[len / 2] <= edited_range.start {
+                continue;
+            }
+            let mut remap = Vec::with_capacity(len);
+            let mut retained = 0;
+            entry.decorations.retain_mut(|decoration| {
+                *decoration.range_mut() =
+                    adjust_range_for_edit(decoration.range(), edited_range, inserted_len);
+                let keep = !decoration.range().is_empty();
+                remap.push(if keep { retained } else { usize::MAX });
+                retained += usize::from(keep);
+                keep
             });
+            // Anchor transforms are monotone. Preserve start ordering and remap
+            // removed entries rather than sorting on every keystroke: O(n).
+            entry.index.indices.retain_mut(|ix| {
+                *ix = remap[*ix];
+                *ix != usize::MAX
+            });
+            entry.index.max_ends.resize(retained, 0);
+            entry.index.build(&entry.decorations, 0..retained);
         }
     }
 
     pub(super) fn clear(&mut self) {
-        for (_, decorations) in &mut self.entries {
-            decorations.clear();
+        for entry in self.entries.values_mut() {
+            *entry = DecorationEntries::new(Vec::new());
         }
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = &[TextDecoration]> {
+    pub(super) fn iter(&self) -> impl Iterator<Item = &[T]> {
         self.entries
-            .iter()
-            .map(|(_, decorations)| decorations.as_slice())
+            .values()
+            .map(|entry| entry.decorations.as_slice())
+    }
+
+    /// Query visible buffer spans (not the intervening folded-away text).
+    /// Rebuilds happen on mutations, never in layout/paint. Preserve owner/item
+    /// order after deduplicating ranges crossing multiple visible lines.
+    pub(super) fn intersecting(&self, ranges: &[Range<usize>]) -> Vec<&T> {
+        let mut result = Vec::new();
+        for entry in self.entries.values() {
+            let mut matches = Vec::new();
+            for range in ranges {
+                entry.index.query(
+                    &entry.decorations,
+                    0..entry.decorations.len(),
+                    range,
+                    &mut matches,
+                );
+            }
+            matches.sort_unstable();
+            matches.dedup();
+            result.extend(matches.into_iter().map(|ix| &entry.decorations[ix]));
+        }
+        result
     }
 }
 
@@ -398,21 +486,61 @@ fn adjust_range_for_edit(
     start..end
 }
 
-fn normalize(text: &Rope, decorations: Vec<TextDecoration>) -> Vec<TextDecoration> {
+fn normalize<T: TrackedDecoration>(text: &Rope, decorations: Vec<T>) -> Vec<T> {
     decorations
         .into_iter()
-        .filter_map(|decoration| {
-            let range = text.clip_offset(decoration.range.start, Bias::Left)
-                ..text.clip_offset(decoration.range.end, Bias::Right);
-            (!range.is_empty()).then_some(TextDecoration {
-                range,
-                style: decoration.style,
-            })
+        .filter_map(|mut decoration| {
+            // Reject reversed ranges before clipping, which could otherwise turn a
+            // reversed pair within a multibyte character into a nonempty range.
+            if decoration.range().is_empty() {
+                return None;
+            }
+            let range = text.clip_offset(decoration.range().start, Bias::Left)
+                ..text.clip_offset(decoration.range().end, Bias::Right);
+            if range.is_empty() {
+                return None;
+            }
+            *decoration.range_mut() = range;
+            Some(decoration)
         })
         .collect()
 }
 
 impl InputBaseState<EditorMode> {
+    /// Monotonic content revision. Selection, focus and scrolling do not change it.
+    pub fn document_revision(&self) -> u64 {
+        self.extras.annotations.document_revision
+    }
+
+    /// Create an independently owned collection of geometric range decorations.
+    ///
+    /// Ranges use UTF-8 byte offsets and the same tracking as text decorations:
+    /// insertion at either edge does not expand the range, insertion inside does,
+    /// replacement clips overlapping anchors, and deletion removes empty ranges.
+    /// Undo, redo, whole-document replacement and formatting apply these same edit
+    /// transforms; decorations themselves are not undo history, so deleted ranges
+    /// are not resurrected by undo. Folding changes projection, not stored ranges.
+    ///
+    /// Fills paint behind frames; within each style, later collections/items paint
+    /// over earlier ones. Neither affects text layout, hit testing or focus. The
+    /// default color is the editor foreground (12% opacity for fills).
+    /// Collections live until explicitly disposed or the editor is dropped.
+    pub fn create_range_decorations_collection(
+        &mut self,
+        decorations: Vec<RangeDecoration>,
+        cx: &mut Context<Self>,
+    ) -> RangeDecorationCollection {
+        let id = self
+            .extras
+            .range_decorations
+            .create(normalize(&self.text, decorations));
+        cx.notify();
+        RangeDecorationCollection {
+            state: cx.entity().downgrade(),
+            id,
+        }
+    }
+
     /// Create an independently managed collection of text decorations.
     ///
     /// This follows Monaco's
@@ -442,114 +570,126 @@ impl InputBaseState<EditorMode> {
             id,
         }
     }
-
-    /// Monotonic content revision. Selection, focus and scrolling do not change it.
-    pub fn document_revision(&self) -> u64 {
-        self.extras.annotations.document_revision
-    }
-
-    /// Replace all gutter markers. The marker lane remains reserved after first use.
-    pub fn set_gutter_markers(&mut self, markers: Vec<GutterMarker>, cx: &mut Context<Self>) {
-        self.extras.annotations.gutter_markers = markers;
-        self.extras.annotations.gutter_lane_reserved = true;
-        cx.notify();
-    }
-
-    pub fn clear_gutter_markers(&mut self, cx: &mut Context<Self>) {
-        if !self.extras.annotations.gutter_markers.is_empty() {
-            self.extras.annotations.gutter_markers.clear();
-            cx.notify();
-        }
-    }
-
-    pub fn gutter_markers(&self) -> &[GutterMarker] {
-        &self.extras.annotations.gutter_markers
-    }
-
-    pub fn gutter_marker_bounds(&self, id: &str) -> Option<Bounds<Pixels>> {
-        self.extras
-            .annotations
-            .gutter_marker_bounds
-            .borrow()
-            .get(id)
-            .copied()
-    }
-
-    pub fn set_gutter_marker_renderer(
-        &mut self,
-        renderer: GutterMarkerRenderer,
-        cx: &mut Context<Self>,
-    ) {
-        self.extras.annotations.gutter_marker_renderer = Some(renderer);
-        cx.notify();
-    }
-
-    #[doc(hidden)]
-    pub fn project_gutter_marker_renderer(&mut self, renderer: GutterMarkerRenderer) {
-        self.extras.annotations.gutter_marker_renderer = Some(renderer);
-    }
-
-    pub fn set_range_decorations(
-        &mut self,
-        decorations: Vec<RangeDecoration>,
-        cx: &mut Context<Self>,
-    ) {
-        self.extras.annotations.range_decorations = normalize_ranges(&self.text, decorations);
-        cx.notify();
-    }
-
-    pub fn clear_range_decorations(&mut self, cx: &mut Context<Self>) {
-        if !self.extras.annotations.range_decorations.is_empty() {
-            self.extras.annotations.range_decorations.clear();
-            cx.notify();
-        }
-    }
-
-    pub fn range_decorations(&self) -> &[RangeDecoration] {
-        &self.extras.annotations.range_decorations
-    }
-
-    pub fn set_inline_widgets(&mut self, widgets: Vec<InlineWidget>, cx: &mut Context<Self>) {
-        self.extras.annotations.inline_widgets = normalize_widgets(&self.text, widgets);
-        cx.notify();
-    }
-
-    pub fn clear_inline_widgets(&mut self, cx: &mut Context<Self>) {
-        if !self.extras.annotations.inline_widgets.is_empty() {
-            self.extras.annotations.inline_widgets.clear();
-            cx.notify();
-        }
-    }
-
-    pub fn inline_widgets(&self) -> &[InlineWidget] {
-        &self.extras.annotations.inline_widgets
-    }
-}
-
-fn normalize_ranges(text: &Rope, decorations: Vec<RangeDecoration>) -> Vec<RangeDecoration> {
-    decorations
-        .into_iter()
-        .filter_map(|mut decoration| {
-            decoration.range = text.clip_offset(decoration.range.start, Bias::Left)
-                ..text.clip_offset(decoration.range.end, Bias::Right);
-            (!decoration.range.is_empty()).then_some(decoration)
-        })
-        .collect()
-}
-
-fn normalize_widgets(text: &Rope, widgets: Vec<InlineWidget>) -> Vec<InlineWidget> {
-    widgets
-        .into_iter()
-        .map(|mut widget| {
-            widget.offset = text.clip_offset(widget.offset, Bias::Left);
-            widget
-        })
-        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn geometric_collections_share_utf8_normalization_and_edit_affinity() {
+        let mut collections = DecorationCollections::<RangeDecoration>::default();
+        let text = Rope::from("héllo world");
+        let first = collections.create(normalize(
+            &text,
+            vec![
+                RangeDecoration::new(2..4),
+                RangeDecoration::new(2..1),
+                RangeDecoration::new(100..200),
+            ],
+        ));
+        let second = collections.create(normalize(&text, vec![RangeDecoration::new(7..12)]));
+        assert_eq!(collections.get(first).unwrap()[0].range(), &(1..4));
+        assert_eq!(collections.get(first).unwrap().len(), 1);
+        collections.adjust_for_edit(&(1..1), 2);
+        assert_eq!(collections.get(first).unwrap()[0].range(), &(3..6));
+        collections.adjust_for_edit(&(6..6), 1);
+        assert_eq!(collections.get(first).unwrap()[0].range(), &(3..6));
+        collections.adjust_for_edit(&(4..4), 2);
+        assert_eq!(collections.get(first).unwrap()[0].range(), &(3..8));
+        collections.adjust_for_edit(&(3..8), 0);
+        assert!(collections.get(first).unwrap().is_empty());
+        assert!(!collections.get(second).unwrap().is_empty());
+        collections.entries.remove(&first);
+        let third = collections.create(vec![]);
+        assert_ne!(third, first);
+        assert!(!collections.set(first, vec![RangeDecoration::new(0..1)]));
+        assert!(collections.get(second).is_some());
+    }
+
+    #[test]
+    fn visible_query_preserves_layers_and_skips_folded_spans() {
+        let mut collections = DecorationCollections::<RangeDecoration>::default();
+        let first = collections.create(vec![
+            RangeDecoration::new(90..100),
+            RangeDecoration::new(0..100),
+            RangeDecoration::new(40..50), // hidden in a fold
+            RangeDecoration::new(0..5),
+        ]);
+        collections.create(vec![RangeDecoration::new(2..4)]);
+        let ranges = |collections: &DecorationCollections<RangeDecoration>| {
+            collections
+                .intersecting(&[0..5, 90..100])
+                .iter()
+                .map(|d| d.range().clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ranges(&collections), vec![90..100, 0..100, 0..5, 2..4]);
+        collections.adjust_for_edit(&(0..0), 1);
+        assert_eq!(ranges(&collections), vec![91..101, 1..101, 1..6, 3..5]);
+        collections.set(first, vec![RangeDecoration::new(50..60)]);
+        assert_eq!(ranges(&collections), vec![3..5]);
+    }
+
+    #[test]
+    fn interval_index_culls_large_collections_even_with_a_spanning_range() {
+        let mut decorations: Vec<_> = (0..100_000)
+            .map(|ix| RangeDecoration::new(ix * 10..ix * 10 + 5))
+            .collect();
+        decorations.push(RangeDecoration::new(0..1_000_000));
+        let index = DecorationIndex::new(&decorations);
+        for query in [
+            0..1,
+            500_000..500_020,
+            999_990..1_000_001,
+            1_000_000..1_000_010,
+        ] {
+            let mut matches = Vec::new();
+            let visited = index.query(&decorations, 0..decorations.len(), &query, &mut matches);
+            matches.sort_unstable();
+            let expected: Vec<_> = decorations
+                .iter()
+                .enumerate()
+                .filter_map(|(ix, d)| {
+                    (d.range.start < query.end && d.range.end > query.start).then_some(ix)
+                })
+                .collect();
+            assert_eq!(matches, expected);
+            assert!(visited < 100, "visited {visited} nodes for {query:?}");
+        }
+    }
+
+    #[test]
+    fn interval_index_matches_linear_reference_for_overlaps_and_mutations() {
+        let mut collections = DecorationCollections::<RangeDecoration>::default();
+        let id = collections.create(
+            (0..512)
+                .map(|ix| {
+                    let start = (ix * 37) % 997;
+                    RangeDecoration::new(start..start + ix % 61 + 1)
+                })
+                .collect(),
+        );
+        for edit in [0..0, 300..450, 900..1100] {
+            collections.adjust_for_edit(&edit, 3);
+            for start in (0..1100).step_by(13) {
+                let query = start..start + 17;
+                let expected: Vec<_> = collections
+                    .get(id)
+                    .unwrap()
+                    .iter()
+                    .filter(|d| d.range.start < query.end && d.range.end > query.start)
+                    .map(|d| d.range.clone())
+                    .collect();
+                let actual: Vec<_> = collections
+                    .intersecting(&[query])
+                    .iter()
+                    .map(|d| d.range.clone())
+                    .collect();
+                assert_eq!(actual, expected);
+            }
+        }
+    }
 
     #[test]
     fn collections_are_independent_and_ranges_are_clipped() {
@@ -629,32 +769,5 @@ mod tests {
         assert_eq!(adjust_range_for_edit(&(2..6), &(2..2), 2), 4..8);
         assert_eq!(adjust_range_for_edit(&(2..6), &(6..6), 2), 2..6);
         assert_eq!(adjust_range_for_edit(&(2..6), &(2..6), 3), 2..5);
-    }
-
-    #[test]
-    fn geometric_decorations_and_widgets_follow_utf8_edits() {
-        let mut annotations = EditorAnnotations {
-            range_decorations: vec![RangeDecoration::new("range", 2..6)],
-            inline_widgets: vec![InlineWidget::new("hint", 6, "hint")],
-            ..Default::default()
-        };
-
-        annotations.adjust_for_edit(&(0..0), "é".len());
-        assert_eq!(annotations.range_decorations[0].range(), &(4..8));
-        assert_eq!(annotations.inline_widgets[0].offset(), 8);
-
-        annotations.adjust_for_edit(&(5..7), 1);
-        assert_eq!(annotations.range_decorations[0].range(), &(4..7));
-        assert_eq!(annotations.inline_widgets[0].offset(), 7);
-    }
-
-    #[test]
-    fn extension_ranges_and_offsets_clip_to_utf8_boundaries() {
-        let text = Rope::from("éx");
-        let decorations = normalize_ranges(&text, vec![RangeDecoration::new("range", 1..3)]);
-        let widgets = normalize_widgets(&text, vec![InlineWidget::new("hint", 1, "hint")]);
-
-        assert_eq!(decorations[0].range(), &(0..3));
-        assert_eq!(widgets[0].offset(), 0);
     }
 }
