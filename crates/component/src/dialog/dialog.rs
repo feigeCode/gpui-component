@@ -14,7 +14,7 @@ use crate::{
     ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, WindowExt as _,
     animation::cubic_bezier,
     button::{Button, ButtonVariant, ButtonVariants as _},
-    dialog::{DialogContent, DialogTitle},
+    dialog::{DialogContent, DialogFooter, DialogTitle},
     scroll::ScrollableElement as _,
     v_flex,
 };
@@ -247,6 +247,10 @@ pub struct Dialog {
 
     pub(super) button_props: DialogButtonProps,
 
+    /// Whether to render the default OK/Cancel footer from `button_props`
+    /// when the caller does not provide their own `footer`.
+    pub(crate) default_footer: bool,
+
     /// This will be change when open the dialog, the focus handle is create when open the dialog.
     pub(crate) focus_handle: FocusHandle,
     pub(crate) layer_ix: usize,
@@ -278,6 +282,7 @@ impl Dialog {
             layer_ix: 0,
             selection_scope: TextSelectionScopeId::default(),
             button_props: DialogButtonProps::default(),
+            default_footer: false,
         }
     }
 
@@ -323,6 +328,13 @@ impl Dialog {
     /// Set the button props of the dialog.
     pub fn button_props(mut self, button_props: DialogButtonProps) -> Self {
         self.button_props = button_props;
+        self
+    }
+
+    /// Shows the default OK/Cancel footer with a visible Cancel button.
+    pub fn confirm(mut self) -> Self {
+        self.button_props.show_cancel = true;
+        self.default_footer = true;
         self
     }
     pub(crate) fn with_base_alert_dialog(mut self, base: gpui_base::AlertDialog) -> Self {
@@ -489,6 +501,9 @@ impl RenderOnce for Dialog {
         let on_close = self.button_props.on_close.clone();
         let on_ok = self.button_props.on_ok.clone();
         let on_cancel = self.button_props.on_cancel.clone();
+        let has_footer = self.footer.is_some();
+        let default_footer = self.default_footer;
+        let show_cancel = self.button_props.show_cancel;
 
         let window_paddings = crate::window_border::window_paddings(window);
         let view_size = window.viewport_size()
@@ -643,6 +658,23 @@ impl RenderOnce for Dialog {
                                                 .pl(paddings.left)
                                                 .pr(paddings.right)
                                                 .child(footer),
+                                        )
+                                    })
+                                    .when(!has_footer && default_footer, |this| {
+                                        let button_props = self.button_props.clone();
+                                        this.child(
+                                            div()
+                                                .pl(paddings.left)
+                                                .pr(paddings.right)
+                                                .child(
+                                                    DialogFooter::new()
+                                                        .when(show_cancel, |this| {
+                                                            this.child(button_props.render_cancel(
+                                                                window, cx,
+                                                            ))
+                                                        })
+                                                        .child(button_props.render_ok(window, cx)),
+                                                ),
                                         )
                                     })
                                     .children(self.props.close_button.then(|| {
