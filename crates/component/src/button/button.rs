@@ -204,6 +204,8 @@ pub struct Button {
     hover_group: Option<SharedString>,
     hover_group_held: bool,
     size: Size,
+    /// Independent glyph size for the icon, overriding the button size.
+    glyph_size: Option<Size>,
     compact: bool,
     tooltip: Option<(
         SharedString,
@@ -252,6 +254,7 @@ impl Button {
             },
             border_edges: Edges::all(true),
             size: Size::Medium,
+            glyph_size: None,
             tooltip: None,
             tooltip_placement: None,
             tooltip_builder: None,
@@ -361,6 +364,12 @@ impl Button {
     /// Set the icon of the button, if the Button have no label, the button well in Icon Button mode.
     pub fn icon(mut self, icon: impl Into<ButtonIcon>) -> Self {
         self.icon = Some(icon.into());
+        self
+    }
+
+    /// Set the glyph size of the icon, independent of the button size.
+    pub fn glyph_size(mut self, size: impl Into<Size>) -> Self {
+        self.glyph_size = Some(size.into());
         self
     }
 
@@ -560,6 +569,7 @@ impl RenderOnce for Button {
             Size::Size(v) => Size::Size(v * 0.75),
             _ => self.size,
         };
+        let glyph_size = self.glyph_size.unwrap_or(icon_size);
         let has_content = self.icon.is_some() || self.label.is_some() || !children.is_empty();
 
         let focus_handle = window
@@ -692,7 +702,7 @@ impl RenderOnce for Button {
                 this.child(
                     icon.loading_icon(self.loading_icon)
                         .loading(self.loading)
-                        .with_size(icon_size),
+                        .with_size(glyph_size),
                 )
             })
             .when_some(self.label, |this, label| {
