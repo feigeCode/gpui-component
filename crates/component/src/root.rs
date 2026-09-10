@@ -10,13 +10,23 @@ use crate::{
 };
 use gpui::{
     AnyView, App, AppContext, ClipboardItem, Context, DefiniteLength, ElementId, Entity,
-    FocusHandle, InteractiveElement, IntoElement, KeyBinding, ParentElement as _, Pixels, Render,
-    StyleRefinement, Styled, WeakFocusHandle, Window, actions, div, prelude::FluentBuilder as _,
+    EventEmitter, FocusHandle, InteractiveElement, IntoElement, KeyBinding, ParentElement as _,
+    Pixels, Render, StyleRefinement, Styled, WeakFocusHandle, Window, actions, div,
+    prelude::FluentBuilder as _,
 };
 use gpui_base::{TextSelection, TextSelectionLayer, TextSelectionScopeId};
 use std::{any::TypeId, rc::Rc};
 
 actions!(root, [Tab, TabPrev]);
+
+/// Emitted when the number of active dialogs changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DialogStateChanged {
+    /// The number of currently active dialogs.
+    pub active_count: usize,
+}
+
+impl EventEmitter<DialogStateChanged> for Root {}
 
 const CONTEXT: &str = "Root";
 pub(crate) fn init(cx: &mut App) {
@@ -316,6 +326,9 @@ impl Root {
         // Opening a modal confines selection to it; drop any background
         // selection so it cannot linger (or be copied) under the modal.
         gpui_base::TextSelection::clear(window, cx);
+        cx.emit(DialogStateChanged {
+            active_count: self.active_dialogs.len(),
+        });
         cx.notify();
     }
 
@@ -332,6 +345,9 @@ impl Root {
             window.focus(&handle, cx);
         }
         gpui_base::TextSelection::clear(window, cx);
+        cx.emit(DialogStateChanged {
+            active_count: self.active_dialogs.len(),
+        });
         cx.notify();
     }
 
@@ -356,6 +372,9 @@ impl Root {
             .detach();
         }
         gpui_base::TextSelection::clear(window, cx);
+        cx.emit(DialogStateChanged {
+            active_count: self.active_dialogs.len(),
+        });
         cx.notify();
     }
 

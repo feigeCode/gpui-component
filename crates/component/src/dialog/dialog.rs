@@ -331,6 +331,13 @@ impl Dialog {
         self
     }
 
+    /// Shows the default footer with an OK button only.
+    pub fn alert(mut self) -> Self {
+        self.button_props.show_cancel = false;
+        self.default_footer = true;
+        self
+    }
+
     /// Shows the default OK/Cancel footer with a visible Cancel button.
     pub fn confirm(mut self) -> Self {
         self.button_props.show_cancel = true;
