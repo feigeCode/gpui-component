@@ -167,6 +167,11 @@ impl Icon {
         self
     }
 
+    /// Read back the resolved rendering mode (mono vs. intrinsic colors).
+    pub fn resolved_color_mode(&self) -> IconColorMode {
+        self.color_mode
+    }
+
     /// Render the icon with its intrinsic colors (e.g. brand or product marks).
     pub fn color(mut self) -> Self {
         self.color_mode = IconColorMode::Color;
