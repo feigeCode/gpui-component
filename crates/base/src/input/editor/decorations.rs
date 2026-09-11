@@ -634,6 +634,179 @@ impl GutterLanes {
     }
 }
 
+/// A non-document string painted at a UTF-8 byte offset.
+///
+/// Inline widgets are not part of the document: edits move their anchor but never
+/// move them into a selection, and they are not measured by text layout. Clones
+/// address the same collection entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineWidget {
+    offset: usize,
+    text: SharedString,
+}
+
+impl InlineWidget {
+    pub fn new(offset: usize, text: impl Into<SharedString>) -> Self {
+        Self {
+            offset,
+            text: text.into(),
+        }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn text(&self) -> &SharedString {
+        &self.text
+    }
+}
+
+/// An independently owned collection of inline widgets.
+///
+/// Clones address the same collection. Dropping a handle does not clear it; use
+/// [`Self::clear`] to empty it or [`Self::dispose`] to release it. Operations on
+/// a disposed collection or a dropped editor are harmless no-ops.
+#[derive(Clone, Debug)]
+pub struct InlineWidgetCollection {
+    state: WeakEntity<InputBaseState<EditorMode>>,
+    id: DecorationCollectionId,
+}
+
+impl InlineWidgetCollection {
+    pub fn set(&self, widgets: Vec<InlineWidget>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            let widgets = normalize_widgets(&state.text, widgets);
+            if state.extras.inline_widgets.set(self.id, widgets) {
+                cx.notify();
+            }
+        });
+    }
+
+    pub fn append(&self, widgets: Vec<InlineWidget>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            let widgets = normalize_widgets(&state.text, widgets);
+            if state.extras.inline_widgets.append(self.id, widgets) {
+                cx.notify();
+            }
+        });
+    }
+
+    pub fn clear(&self, cx: &mut App) {
+        self.set(Vec::new(), cx);
+    }
+
+    pub fn dispose(&self, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            if state.extras.inline_widgets.remove(self.id) {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Read tracked UTF-8 byte offsets in insertion order.
+    pub fn get_offsets(&self, cx: &App) -> Vec<usize> {
+        self.state
+            .read_with(cx, |state, _| {
+                state
+                    .extras
+                    .inline_widgets
+                    .get(self.id)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(InlineWidget::offset)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+fn adjust_offset_for_edit(
+    offset: usize,
+    edited_range: &Range<usize>,
+    inserted_len: usize,
+) -> usize {
+    if offset <= edited_range.start {
+        return offset;
+    }
+    if offset < edited_range.end {
+        return edited_range.start.saturating_add(inserted_len);
+    }
+    let removed_len = edited_range.end.saturating_sub(edited_range.start);
+    if inserted_len >= removed_len {
+        offset.saturating_add(inserted_len - removed_len)
+    } else {
+        offset.saturating_sub(removed_len - inserted_len)
+    }
+}
+
+fn normalize_widgets(text: &Rope, widgets: Vec<InlineWidget>) -> Vec<InlineWidget> {
+    widgets
+        .into_iter()
+        .map(|mut widget| {
+            widget.offset = text.clip_offset(widget.offset, Bias::Left);
+            widget
+        })
+        .collect()
+}
+
+#[derive(Default)]
+pub(crate) struct InlineWidgets {
+    entries: BTreeMap<DecorationCollectionId, Vec<InlineWidget>>,
+    next_id: usize,
+}
+
+impl InlineWidgets {
+    fn create(&mut self, widgets: Vec<InlineWidget>) -> DecorationCollectionId {
+        let id = DecorationCollectionId(self.next_id);
+        self.next_id += 1;
+        self.entries.insert(id, widgets);
+        id
+    }
+
+    fn set(&mut self, id: DecorationCollectionId, widgets: Vec<InlineWidget>) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        *entry = widgets;
+        true
+    }
+
+    fn append(&mut self, id: DecorationCollectionId, widgets: Vec<InlineWidget>) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        entry.extend(widgets);
+        true
+    }
+
+    fn remove(&mut self, id: DecorationCollectionId) -> bool {
+        self.entries.remove(&id).is_some()
+    }
+
+    fn get(&self, id: DecorationCollectionId) -> Option<&[InlineWidget]> {
+        self.entries
+            .get(&id)
+            .map(|widgets| widgets.as_slice())
+    }
+
+    pub(super) fn adjust_for_edit(&mut self, edited_range: &Range<usize>, inserted_len: usize) {
+        for widgets in self.entries.values_mut() {
+            for widget in widgets.iter_mut() {
+                widget.offset = adjust_offset_for_edit(widget.offset, edited_range, inserted_len);
+            }
+        }
+    }
+
+    /// All widgets across every owner, in owner then insertion order.
+    pub(super) fn all(&self) -> Vec<InlineWidget> {
+        self.entries
+            .values()
+            .flat_map(|widgets| widgets.iter().cloned())
+            .collect()
+    }
+}
+
 /// Both text styles and geometric decorations share normalization and edit affinity.
 pub(crate) trait TrackedDecoration {
     fn range(&self) -> &Range<usize>;
@@ -941,6 +1114,26 @@ impl InputBaseState<EditorMode> {
         }
     }
 
+    /// Create an independently owned collection of inline widgets.
+    ///
+    /// Offsets are UTF-8 byte offsets and follow edits the same way a collapsed
+    /// anchor does: inserting at the offset does not move it, inserting before it
+    /// does, and a replacement covering it re-anchors to the replaced span. Widgets
+    /// are painted at their offset and never enter the document, selection or undo.
+    pub fn create_inline_widgets_collection(
+        &mut self,
+        widgets: Vec<InlineWidget>,
+        cx: &mut Context<Self>,
+    ) -> InlineWidgetCollection {
+        let widgets = normalize_widgets(&self.text, widgets);
+        let id = self.extras.inline_widgets.create(widgets);
+        cx.notify();
+        InlineWidgetCollection {
+            state: cx.entity().downgrade(),
+            id,
+        }
+    }
+
     /// Create an independently owned collection of geometric range decorations.
     ///
     /// Ranges use UTF-8 byte offsets and the same tracking as text decorations:
@@ -1034,6 +1227,30 @@ mod tests {
         assert_ne!(third, first);
         assert!(!collections.set(first, vec![RangeDecoration::new(0..1)]));
         assert!(collections.get(second).is_some());
+    }
+
+    #[test]
+    fn inline_widget_offsets_follow_edits_and_owners_are_independent() {
+        let mut widgets = InlineWidgets::default();
+        let text = Rope::from("abc def");
+        let first = widgets.create(normalize_widgets(&text, vec![InlineWidget::new(4, "hint")]));
+        let second = widgets.create(normalize_widgets(&text, vec![InlineWidget::new(0, "a")]));
+
+        // Insert before, then at the anchor: only the former moves it.
+        widgets.adjust_for_edit(&(0..0), 2);
+        assert_eq!(widgets.get(first).unwrap()[0].offset(), 6);
+        widgets.adjust_for_edit(&(6..6), 1);
+        assert_eq!(widgets.get(first).unwrap()[0].offset(), 6);
+
+        // A replacement covering the anchor re-anchors to the replaced span.
+        widgets.adjust_for_edit(&(2..4), 0);
+        assert_eq!(widgets.get(first).unwrap()[0].offset(), 4);
+
+        // Owners are independent and disposal is per collection.
+        assert_eq!(widgets.get(second).unwrap()[0].offset(), 0);
+        assert!(widgets.remove(first));
+        assert!(widgets.get(first).is_none());
+        assert!(widgets.get(second).is_some());
     }
 
     #[test]

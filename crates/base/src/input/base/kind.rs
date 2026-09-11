@@ -26,7 +26,10 @@ use std::rc::Rc;
 use gpui::{Div, Entity, Stateful, Window};
 use ropey::Rope;
 
-use super::decorations::{DecorationCollections, EditorAnnotations, GutterLaneView, GutterLanes};
+use super::decorations::{
+    DecorationCollections, EditorAnnotations, GutterLaneView, GutterLanes, InlineWidget,
+    InlineWidgets,
+};
 use super::lsp::{ContextMenuContent, HoverDefinition, InlineCompletion};
 use crate::input::{
     HighlightStyleResolver, InputEdit, InputHighlighter, RangeDecoration, SyntaxContext,
@@ -96,6 +99,11 @@ pub trait InputExtras: Default + 'static {
     /// Total width reserved by gutter lanes that currently contribute a column.
     fn gutter_lane_reserved_width(&self) -> gpui::Pixels {
         gpui::px(0.)
+    }
+
+    /// Non-document widgets painted at their tracked UTF-8 offsets, in owner order.
+    fn inline_widgets(&self) -> Vec<InlineWidget> {
+        Vec::new()
     }
 
     /// Semantic-token styles for a visible range, when an LSP supplies them.
@@ -363,6 +371,7 @@ pub struct EditorExtras {
     pub(crate) context_menu_task: Task<anyhow::Result<()>>,
     pub(crate) annotations: EditorAnnotations,
     pub(crate) gutter_lanes: GutterLanes,
+    pub(crate) inline_widgets: InlineWidgets,
 }
 
 impl Default for EditorExtras {
@@ -378,6 +387,7 @@ impl Default for EditorExtras {
             context_menu_task: Task::ready(Ok(())),
             annotations: EditorAnnotations::default(),
             gutter_lanes: GutterLanes::default(),
+            inline_widgets: InlineWidgets::default(),
         }
     }
 }

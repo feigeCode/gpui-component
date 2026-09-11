@@ -1449,6 +1449,78 @@ impl<M: InputModeKind> TextElement<M> {
         }
     }
 
+    /// Paint non-document inline widgets on top of the text at their anchored offset.
+    fn paint_inline_widgets(
+        &self,
+        prepaint: &PrepaintState,
+        origin: Point<Pixels>,
+        scroll_offset: Pixels,
+        text_align: TextAlign,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let (widgets, color) = {
+            let state = self.state.read(cx);
+            let color = state.editor_style.muted_foreground;
+            let widgets = state
+                .extras
+                .inline_widgets()
+                .into_iter()
+                .map(|widget| {
+                    let row = state.text.offset_to_point(widget.offset()).row;
+                    (widget, row)
+                })
+                .collect::<Vec<_>>();
+            (widgets, color)
+        };
+        if widgets.is_empty() {
+            return;
+        }
+        let text_style = window.text_style();
+        let text_size = text_style.font_size.to_pixels(window.rem_size());
+        for (widget, row) in &widgets {
+            let Ok(line_index) = prepaint.last_layout.visible_buffer_lines.binary_search(row)
+            else {
+                continue;
+            };
+            let line = &prepaint.last_layout.lines[line_index];
+            let line_offset = prepaint.last_layout.visible_line_byte_offsets[line_index];
+            let Some(widget_point) = line.position_for_index(
+                widget.offset().saturating_sub(line_offset),
+                &prepaint.last_layout,
+                false,
+            ) else {
+                continue;
+            };
+            let y = prepaint.last_layout.visible_top
+                + prepaint.last_layout.lines[..line_index]
+                    .iter()
+                    .map(|line| line.size(prepaint.last_layout.line_height).height)
+                    .fold(px(0.), |height, line_height| height + line_height);
+            let position = widget_point + gpui::point(prepaint.last_layout.line_number_width, y);
+            let text = widget.text().clone();
+            let run = TextRun {
+                len: text.len(),
+                font: text_style.font(),
+                color,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let shaped = window
+                .text_system()
+                .shape_line(text, text_size, &[run], None);
+            let _ = shaped.paint(
+                origin + position + point(scroll_offset, px(0.)),
+                prepaint.last_layout.line_height,
+                text_align,
+                None,
+                window,
+                cx,
+            );
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn layout_lines(
         state: &InputBaseState<M>,
@@ -2537,6 +2609,8 @@ impl<M: InputModeKind> Element for TextElement<M> {
                 }
             }
         }
+
+        self.paint_inline_widgets(prepaint, origin, scroll_offset, text_align, window, cx);
 
         // Paint blinking cursors (shared blink state for all carets)
         if focused && show_cursor {

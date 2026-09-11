@@ -55,6 +55,7 @@ impl InputModeKind for EditorMode {
             .extras
             .range_decorations
             .adjust_for_edit(range, new_len);
+        state.extras.inline_widgets.adjust_for_edit(range, new_len);
     }
 
     fn document_did_change(state: &mut InputBaseState<Self>) {
@@ -241,6 +242,10 @@ impl crate::input::InputExtras for super::EditorExtras {
 
     fn gutter_lane_reserved_width(&self) -> gpui::Pixels {
         self.gutter_lanes.reserved_width()
+    }
+
+    fn inline_widgets(&self) -> Vec<super::InlineWidget> {
+        self.inline_widgets.all()
     }
 
     fn semantic_token_styles(
