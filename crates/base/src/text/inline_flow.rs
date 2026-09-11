@@ -7,16 +7,17 @@ use unicode_segmentation::UnicodeSegmentation as _;
 use gpui::{
     AbsoluteLength, AnyElement, App, AvailableSpace, Bounds, DefiniteLength, Element, ElementId,
     GlobalElementId, InspectorElementId, InteractiveElement as _, IntoElement, LayoutId,
-    LineFragment as WrapLineFragment, ObjectFit, ParentElement as _, Pixels, ShapedLine,
-    SharedString, SharedUri, Size, StatefulInteractiveElement as _, Styled, StyledImage as _,
-    TextRun, TextStyle, WhiteSpace, Window, div, img, point, prelude::FluentBuilder as _, px,
-    relative, size,
+    LineFragment as WrapLineFragment, ObjectFit, ParentElement as _, Pixels, Refineable as _,
+    ShapedLine, SharedString, SharedUri, Size, StatefulInteractiveElement as _, Styled,
+    StyledImage as _, TextRun, TextStyle, WhiteSpace, Window, div, img, point,
+    prelude::FluentBuilder as _, px, relative, size,
 };
 
 use crate::text::text_view::{LinkClickHandlerFn, handle_link_click};
 
 use super::{
     inline::{Inline, InlineHighlight, InlineState, text_runs, text_size_ranges},
+    inline_object::{InlineObject, MeasuredInlineObject},
     node::LinkMark,
     utils::image_source,
 };
@@ -30,7 +31,20 @@ pub(super) struct InlineFlow {
     link_click_handler: Option<Arc<LinkClickHandlerFn>>,
 }
 
+pub(super) type InlineRenderer = dyn Fn(&super::InlineRenderContext, &mut Window, &mut App) -> Option<super::InlineElement>
+    + Send
+    + Sync;
+
 pub(super) enum InlineFlowItem {
+    Object {
+        text: SharedString,
+        id: usize,
+        renderer: Arc<InlineRenderer>,
+        accessibility_label: SharedString,
+        selected: Arc<Mutex<bool>>,
+        style: gpui::HighlightStyle,
+        link: Option<LinkMark>,
+    },
     Text {
         state: Arc<Mutex<InlineState>>,
         text: SharedString,
@@ -46,9 +60,18 @@ pub(super) enum InlineFlowItem {
     },
 }
 
-#[derive(Default)]
 pub(crate) struct InlineFlowLayoutState {
     layout: Arc<Mutex<Option<InlineFlowLayout>>>,
+    typography: InlineFlowTypography,
+}
+
+/// Resolved before `request_measured_layout`, while the parent's text-style
+/// and rem stacks are still active.
+#[derive(Clone)]
+struct InlineFlowTypography {
+    text_style: TextStyle,
+    rem_size: Pixels,
+    line_height: Pixels,
 }
 
 #[derive(Default)]
@@ -59,6 +82,12 @@ struct InlineFlowLayout {
 
 #[derive(Clone)]
 enum PositionedFragment {
+    Object {
+        item_ix: usize,
+        origin: gpui::Point<Pixels>,
+        object: Box<MeasuredInlineObject>,
+        selection_bounds: Bounds<Pixels>,
+    },
     Text {
         item_ix: usize,
         origin: gpui::Point<Pixels>,
@@ -68,6 +97,7 @@ enum PositionedFragment {
         text: SharedString,
         links: Vec<(Range<usize>, LinkMark)>,
         highlights: Vec<(Range<usize>, InlineHighlight)>,
+        selection_bounds: Bounds<Pixels>,
     },
     Image {
         item_ix: usize,
@@ -77,6 +107,12 @@ enum PositionedFragment {
 }
 
 enum MeasureItem {
+    Object {
+        text: SharedString,
+        id: usize,
+        renderer: Arc<InlineRenderer>,
+        style: gpui::HighlightStyle,
+    },
     Text {
         text: SharedString,
         links: Vec<(Range<usize>, LinkMark)>,
@@ -94,10 +130,11 @@ struct LineFragmentLayout {
     kind: LineFragmentKind,
     size: Size<Pixels>,
     source_range: Range<usize>,
-    baseline_adjustment: Pixels,
+    baseline: Pixels,
 }
 
 enum LineFragmentKind {
+    Object(Box<MeasuredInlineObject>),
     Text {
         font_size: Pixels,
         text: SharedString,
@@ -193,8 +230,14 @@ impl Element for InlineFlow {
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
         let measure_items = self.items.iter().map(MeasureItem::from).collect::<Vec<_>>();
-        let line_height = window.line_height();
-        let rem_size = window.rem_size();
+        // A measured-layout callback runs after the parent's text-style stack
+        // is gone. Capture every resolved typography input while this element
+        // is still requested under its Markdown block (notably headings).
+        let typography = InlineFlowTypography {
+            text_style: window.text_style(),
+            rem_size: window.rem_size(),
+            line_height: window.line_height(),
+        };
         let image_sizes = measure_items
             .iter()
             .enumerate()
@@ -204,40 +247,54 @@ impl Element for InlineFlow {
                     url,
                     *width,
                     *height,
-                    line_height,
-                    rem_size,
+                    typography.line_height,
+                    typography.rem_size,
                     window,
                     cx,
                 )),
-                MeasureItem::Text { .. } => None,
+                MeasureItem::Text { .. } | MeasureItem::Object { .. } => None,
             })
             .collect::<Vec<_>>();
-        let layout_state = InlineFlowLayoutState::default();
+        let objects = prepare_objects(&measure_items, &typography.text_style, window, cx);
+        let layout_state = InlineFlowLayoutState {
+            layout: Arc::default(),
+            typography: typography.clone(),
+        };
         let layout_ref = layout_state.layout.clone();
+        let layout_typography = typography.clone();
 
         let layout_id = window.request_measured_layout(Default::default(), {
-            move |known_dimensions, available_space, window, _cx| {
-                let text_style = window.text_style();
-                let wrap_width = if text_style.white_space == WhiteSpace::Normal {
-                    known_dimensions.width.or(match available_space.width {
-                        AvailableSpace::Definite(width) => Some(width),
-                        _ => None,
-                    })
-                } else {
-                    None
-                };
-                let layout = layout_flow(
-                    &measure_items,
-                    &image_sizes,
-                    &text_style,
-                    wrap_width,
-                    window,
-                );
-                let size = layout.size;
-                if let Ok(mut state) = layout_ref.lock() {
-                    *state = Some(layout);
-                }
-                size
+            move |known_dimensions, available_space, window, cx| {
+                window.with_rem_size(Some(layout_typography.rem_size), |window| {
+                    window.with_text_style(
+                        Some(layout_typography.text_style.subtract(&Default::default())),
+                        |window| {
+                            let wrap_width =
+                                if layout_typography.text_style.white_space == WhiteSpace::Normal {
+                                    known_dimensions.width.or(match available_space.width {
+                                        AvailableSpace::Definite(width) => Some(width),
+                                        _ => None,
+                                    })
+                                } else {
+                                    None
+                                };
+                            let layout = layout_measured_flow(
+                                &measure_items,
+                                &image_sizes,
+                                &objects,
+                                &layout_typography.text_style,
+                                wrap_width,
+                                window,
+                                cx,
+                            );
+                            let size = layout.size;
+                            if let Ok(mut state) = layout_ref.lock() {
+                                *state = Some(layout);
+                            }
+                            size
+                        },
+                    )
+                })
             }
         });
 
@@ -259,10 +316,58 @@ impl Element for InlineFlow {
             .ok()
             .and_then(|layout| layout.as_ref().map(|layout| layout.fragments.clone()))
             .unwrap_or_default();
+        let typography = request_layout.typography.clone();
+        let text_style = &typography.text_style;
         let mut elements = Vec::with_capacity(fragments.len());
 
         for fragment in fragments {
             match fragment {
+                PositionedFragment::Object {
+                    item_ix,
+                    origin,
+                    object,
+                    selection_bounds,
+                } => {
+                    let InlineFlowItem::Object {
+                        text,
+                        id,
+                        accessibility_label,
+                        selected,
+                        link,
+                        ..
+                    } = &self.items[item_ix]
+                    else {
+                        continue;
+                    };
+                    let object_size = object.metrics.size;
+                    let mut element = InlineObject::new(
+                        ("inline-object", *id),
+                        text.clone(),
+                        accessibility_label.clone(),
+                        *object,
+                        selected.clone(),
+                        Bounds::new(
+                            bounds.origin + selection_bounds.origin,
+                            selection_bounds.size,
+                        ),
+                        Bounds::new(
+                            point(bounds.left(), bounds.top() + selection_bounds.top()),
+                            size(bounds.size.width, selection_bounds.size.height),
+                        ),
+                    )
+                    .link(link.clone(), self.link_click_handler.clone())
+                    .into_any_element();
+                    element.prepaint_as_root(
+                        bounds.origin + origin,
+                        size(
+                            AvailableSpace::Definite(object_size.width),
+                            AvailableSpace::Definite(object_size.height),
+                        ),
+                        window,
+                        cx,
+                    );
+                    elements.push((element, None));
+                }
                 PositionedFragment::Text {
                     item_ix,
                     origin,
@@ -272,6 +377,7 @@ impl Element for InlineFlow {
                     text,
                     links,
                     mut highlights,
+                    selection_bounds,
                     ..
                 } => {
                     let InlineFlowItem::Text {
@@ -293,8 +399,7 @@ impl Element for InlineFlow {
                         Pixels::ZERO
                     };
                     let background = if is_code {
-                        let style = window.text_style();
-                        let runs = text_runs(text.len(), &style, &highlights);
+                        let runs = text_runs(text.len(), text_style, &highlights);
                         let line = shape_line(text.clone(), font_size, &runs, window);
                         let baseline =
                             (fragment_size.height - line.ascent - line.descent) / 2. + line.ascent;
@@ -339,21 +444,33 @@ impl Element for InlineFlow {
                         self.link_click_handler.clone(),
                     )
                     .selection_source(source_state.clone(), source_range)
+                    .text_style(text_style.clone())
+                    .selection_bounds(Bounds::new(
+                        point(bounds.left(), bounds.top() + selection_bounds.top()),
+                        size(bounds.size.width, selection_bounds.size.height),
+                    ))
                     .paint_origin(bounds.origin + origin + point(padding, Pixels::ZERO));
                     let mut element = div()
+                        .font(text_style.font())
+                        .text_color(text_style.color)
+                        .when_some(text_style.background_color, |this, color| {
+                            this.text_bg(color)
+                        })
                         .text_size(font_size)
                         .line_height(fragment_size.height)
                         .child(inline)
                         .into_any_element();
-                    element.prepaint_as_root(
-                        bounds.origin + origin + point(padding, Pixels::ZERO),
-                        size(
-                            AvailableSpace::Definite(fragment_size.width - padding * 2.),
-                            AvailableSpace::Definite(fragment_size.height),
-                        ),
-                        window,
-                        cx,
-                    );
+                    window.with_rem_size(Some(typography.rem_size), |window| {
+                        element.prepaint_as_root(
+                            bounds.origin + origin + point(padding, Pixels::ZERO),
+                            size(
+                                AvailableSpace::Definite(fragment_size.width - padding * 2.),
+                                AvailableSpace::Definite(fragment_size.height),
+                            ),
+                            window,
+                            cx,
+                        );
+                    });
                     elements.push((element, background));
                 }
                 PositionedFragment::Image {
@@ -402,8 +519,12 @@ impl Element for InlineFlow {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let preserve_selection = crate::GlobalState::global(cx)
+            .text_view_state()
+            .is_some_and(|view| view.read(cx).preserve_inline_selection);
         for item in &self.items {
-            if let InlineFlowItem::Text { state, .. } = item
+            if !preserve_selection
+                && let InlineFlowItem::Text { state, .. } = item
                 && let Ok(mut state) = state.lock()
             {
                 state.selection = None;
@@ -422,6 +543,18 @@ impl Element for InlineFlow {
 impl From<&InlineFlowItem> for MeasureItem {
     fn from(item: &InlineFlowItem) -> Self {
         match item {
+            InlineFlowItem::Object {
+                text,
+                id,
+                renderer,
+                style,
+                ..
+            } => Self::Object {
+                text: text.clone(),
+                id: *id,
+                renderer: renderer.clone(),
+                style: *style,
+            },
             InlineFlowItem::Text {
                 state: _,
                 text,
@@ -448,9 +581,79 @@ impl MeasureItem {
     fn len(&self) -> usize {
         match self {
             MeasureItem::Text { text, .. } => text.len(),
-            MeasureItem::Image { .. } => IMAGE_LEN,
+            MeasureItem::Image { .. } | MeasureItem::Object { .. } => IMAGE_LEN,
         }
     }
+}
+
+/// Intrinsic width for table sizing, using the same objects and wrapping inputs as painting.
+pub(super) fn intrinsic_width(
+    items: &[InlineFlowItem],
+    window: &mut Window,
+    cx: &mut App,
+) -> Pixels {
+    let items = items.iter().map(MeasureItem::from).collect::<Vec<_>>();
+    let line_height = window.line_height();
+    let rem_size = window.rem_size();
+    let images = items
+        .iter()
+        .enumerate()
+        .map(|(ix, item)| match item {
+            MeasureItem::Image { url, width, height } => Some(measure_image_size(
+                ix,
+                url,
+                *width,
+                *height,
+                line_height,
+                rem_size,
+                window,
+                cx,
+            )),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    layout_flow(&items, &images, &window.text_style(), None, window, cx)
+        .size
+        .width
+}
+
+fn prepare_objects(
+    items: &[MeasureItem],
+    text_style: &TextStyle,
+    window: &mut Window,
+    cx: &mut App,
+) -> Vec<Option<MeasuredInlineObject>> {
+    items
+        .iter()
+        .map(|item| match item {
+            MeasureItem::Object {
+                text,
+                id,
+                renderer,
+                style,
+            } => {
+                let style = text_style.clone().highlight(*style);
+                let context = super::InlineRenderContext::new(
+                    style.clone(),
+                    style.font_size.to_pixels(window.rem_size()),
+                    style.line_height_in_pixels(window.rem_size()),
+                    window.rem_size(),
+                );
+                // Must be the id `InlineObject` paints under: GPUI asserts a
+                // stateful child (a plugin's HoverCard) sees the same id path
+                // in request_layout as in prepaint, and the element is laid
+                // out here but painted inside `InlineObject`.
+                Some(window.with_id(("inline-object", *id), |window| {
+                    let element = window
+                        .with_text_style(Some(style.subtract(&Default::default())), |window| {
+                            renderer(&context, window, cx)
+                        });
+                    MeasuredInlineObject::measure(text, element, &style, window, cx)
+                }))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn layout_flow(
@@ -459,6 +662,28 @@ fn layout_flow(
     text_style: &TextStyle,
     wrap_width: Option<Pixels>,
     window: &mut Window,
+    cx: &mut App,
+) -> InlineFlowLayout {
+    let objects = prepare_objects(items, text_style, window, cx);
+    layout_measured_flow(
+        items,
+        image_sizes,
+        &objects,
+        text_style,
+        wrap_width,
+        window,
+        cx,
+    )
+}
+
+fn layout_measured_flow(
+    items: &[MeasureItem],
+    image_sizes: &[Option<Size<Pixels>>],
+    prepared_objects: &[Option<MeasuredInlineObject>],
+    text_style: &TextStyle,
+    wrap_width: Option<Pixels>,
+    window: &mut Window,
+    _cx: &mut App,
 ) -> InlineFlowLayout {
     let line_height = window.pixel_snap(window.line_height());
     let rem_size = window.rem_size();
@@ -467,7 +692,11 @@ fn layout_flow(
         return InlineFlowLayout::default();
     }
 
-    let line_ranges = line_ranges(items, image_sizes, text_style, wrap_width, window);
+    let objects = prepared_objects
+        .iter()
+        .map(|object| object.clone().map(|object| object.fit_text(wrap_width)))
+        .collect::<Vec<_>>();
+    let line_ranges = line_ranges(items, image_sizes, &objects, text_style, wrap_width, window);
     let font_size = text_style.font_size.to_pixels(rem_size);
     let mut fragments = Vec::new();
     let mut max_width = Pixels::ZERO;
@@ -476,7 +705,17 @@ fn layout_flow(
     for line_range in line_ranges {
         let mut line_fragments = Vec::new();
         let mut line_width = Pixels::ZERO;
-        let mut actual_line_height = line_height;
+        // `LineLayout` is the metric source used by the text paint path. Its
+        // descent is normalized positive by native backends, whereas
+        // `FontMetrics::descent` remains signed. Start with the same shaped
+        // body metrics used below for every text fragment rather than mixing
+        // those two conventions through `TextSystem::baseline_offset`.
+        let body_runs = text_runs(1, text_style, &[]);
+        let body_line = shape_line(" ".into(), font_size, &body_runs, window);
+        let (body_line_height, body_baseline) =
+            shaped_line_height_and_baseline(&body_line, line_height, window);
+        let mut line_ascent = body_baseline;
+        let mut line_descent = body_line_height - body_baseline;
         let mut item_start = 0;
 
         for (item_ix, item) in items.iter().enumerate() {
@@ -522,17 +761,10 @@ fn layout_flow(
                         let width = shaped_line.width() + padding;
                         // Keep the glyph paint layer large enough for ascenders and descenders.
                         // The compact code background is painted independently.
-                        let segment_line_height = window
-                            .pixel_snap(line_height.max(shaped_line.ascent + shaped_line.descent));
-                        let baseline =
-                            (segment_line_height - shaped_line.ascent - shaped_line.descent) / 2.
-                                + shaped_line.ascent;
-                        actual_line_height = actual_line_height.max(segment_line_height);
-                        let body_font = window.text_system().resolve_font(&text_style.font());
-                        let body_baseline =
-                            window
-                                .text_system()
-                                .baseline_offset(body_font, font_size, line_height);
+                        let (segment_line_height, baseline) =
+                            shaped_line_height_and_baseline(&shaped_line, line_height, window);
+                        line_ascent = line_ascent.max(baseline);
+                        line_descent = line_descent.max(segment_line_height - baseline);
                         line_width += width;
                         line_fragments.push(LineFragmentLayout {
                             item_ix,
@@ -544,24 +776,40 @@ fn layout_flow(
                             },
                             size: size(width, segment_line_height),
                             source_range: start..end,
-                            baseline_adjustment: body_baseline
-                                - baseline
-                                - (line_height - segment_line_height) / 2.,
+                            baseline: baseline,
                         });
                     }
+                }
+                MeasureItem::Object { .. } => {
+                    let object = objects[item_ix].as_ref().unwrap().clone();
+                    let metrics = object.metrics;
+                    line_ascent = line_ascent.max(metrics.baseline);
+                    line_descent = line_descent.max(metrics.size.height - metrics.baseline);
+                    line_width += metrics.size.width;
+                    line_fragments.push(LineFragmentLayout {
+                        item_ix,
+                        kind: LineFragmentKind::Object(Box::new(object)),
+                        size: metrics.size,
+                        source_range: 0..IMAGE_LEN,
+                        baseline: metrics.baseline,
+                    });
                 }
                 MeasureItem::Image { .. } => {
                     if line_range.start <= item_start && item_end <= line_range.end {
                         let size = image_sizes[item_ix]
                             .expect("image size should be measured before layout");
                         line_width += size.width;
-                        actual_line_height = actual_line_height.max(size.height);
+                        let baseline = (size.height / 2. + body_baseline - line_height / 2.)
+                            .max(Pixels::ZERO)
+                            .min(size.height);
+                        line_ascent = line_ascent.max(baseline);
+                        line_descent = line_descent.max(size.height - baseline);
                         line_fragments.push(LineFragmentLayout {
                             item_ix,
                             kind: LineFragmentKind::Image,
                             size,
                             source_range: 0..IMAGE_LEN,
-                            baseline_adjustment: Pixels::ZERO,
+                            baseline: baseline,
                         });
                     }
                 }
@@ -572,11 +820,18 @@ fn layout_flow(
 
         let mut x = Pixels::ZERO;
         for fragment in line_fragments {
-            let origin = point(
-                x,
-                y + (actual_line_height - fragment.size.height) / 2. + fragment.baseline_adjustment,
+            let origin = point(x, y + line_ascent - fragment.baseline);
+            let selection_bounds = Bounds::new(
+                point(x, y),
+                size(fragment.size.width, line_ascent + line_descent),
             );
             let positioned = match fragment.kind {
+                LineFragmentKind::Object(object) => PositionedFragment::Object {
+                    item_ix: fragment.item_ix,
+                    origin,
+                    object,
+                    selection_bounds,
+                },
                 LineFragmentKind::Text {
                     font_size,
                     text,
@@ -587,6 +842,7 @@ fn layout_flow(
                     origin,
                     size: fragment.size,
                     source_range: fragment.source_range,
+                    selection_bounds,
                     font_size,
                     text,
                     links,
@@ -603,7 +859,7 @@ fn layout_flow(
         }
 
         max_width = max_width.max(line_width);
-        y += actual_line_height;
+        y += line_ascent + line_descent;
     }
 
     InlineFlowLayout {
@@ -615,6 +871,7 @@ fn layout_flow(
 fn line_ranges(
     items: &[MeasureItem],
     image_sizes: &[Option<Size<Pixels>>],
+    objects: &[Option<MeasuredInlineObject>],
     text_style: &TextStyle,
     wrap_width: Option<Pixels>,
     window: &mut Window,
@@ -669,6 +926,12 @@ fn line_ranges(
                                 window,
                             );
                         }
+                    }
+                    MeasureItem::Object { .. } => {
+                        wrap_fragments.push(WrapLineFragment::element(
+                            objects[ix].as_ref().unwrap().metrics.size.width,
+                            IMAGE_LEN,
+                        ));
                     }
                     MeasureItem::Image { .. } => {
                         if hard_line.start <= item_start && item_end <= hard_line.end {
@@ -885,6 +1148,21 @@ fn shape_line(
     window.text_system().shape_line(text, font_size, runs, None)
 }
 
+/// Returns the line box and baseline from the shaped metrics used by GPUI text
+/// painting. `ShapedLine::descent` is positive; do not substitute the signed
+/// `FontMetrics::descent` exposed by `TextSystem::baseline_offset` here.
+fn shaped_line_height_and_baseline(
+    shaped_line: &ShapedLine,
+    requested_line_height: Pixels,
+    window: &Window,
+) -> (Pixels, Pixels) {
+    let line_height =
+        window.pixel_snap(requested_line_height.max(shaped_line.ascent + shaped_line.descent));
+    let baseline =
+        (line_height - shaped_line.ascent - shaped_line.descent) / 2. + shaped_line.ascent;
+    (line_height, baseline)
+}
+
 pub(super) fn slice_ranges<T, U>(
     ranges: &[(Range<usize>, T)],
     start: usize,
@@ -905,6 +1183,79 @@ pub(super) fn slice_ranges<T, U>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn atomic_objects_wrap_and_share_a_baseline_at_multiple_font_sizes() {
+        use super::super::inline::test_draw::in_prepaint;
+        use super::super::inline::test_fonts::{BODY, WideMonoTextSystem};
+        use gpui::TestApp;
+        let mut app = TestApp::with_text_system(Arc::new(WideMonoTextSystem));
+        in_prepaint(&mut app, |window, cx| {
+            for scale in [1., 1.5, 2.] {
+                let style = TextStyle {
+                    font_family: BODY.into(),
+                    font_size: px(16. * scale).into(),
+                    ..Default::default()
+                };
+                let items = vec![
+                    MeasureItem::Text {
+                        text: "中文 ".into(),
+                        links: vec![],
+                        highlights: vec![],
+                    },
+                    MeasureItem::Object {
+                        text: "x²".into(),
+                        id: 0,
+                        renderer: Arc::new(|_, _, _| None),
+                        style: Default::default(),
+                    },
+                    MeasureItem::Object {
+                        text: "y²".into(),
+                        id: 1,
+                        renderer: Arc::new(|_, _, _| None),
+                        style: Default::default(),
+                    },
+                    MeasureItem::Text {
+                        text: " English".into(),
+                        links: vec![],
+                        highlights: vec![],
+                    },
+                ];
+                for width in [1., 30., 80., 500.] {
+                    let layout = layout_flow(
+                        &items,
+                        &[None, None, None, None],
+                        &style,
+                        Some(px(width)),
+                        window,
+                        cx,
+                    );
+                    let objects: Vec<_> = layout
+                        .fragments
+                        .iter()
+                        .filter_map(|fragment| match fragment {
+                            PositionedFragment::Object { origin, object, .. } => {
+                                Some((origin, object))
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    assert_eq!(objects.len(), 2);
+                    for (origin, object) in &objects {
+                        assert!(object.metrics.size.width <= px(width));
+                        assert!(origin.y >= px(0.));
+                        assert!(origin.y + object.metrics.size.height <= layout.size.height);
+                    }
+                    if width == 500. {
+                        assert_eq!(
+                            objects[0].0.y + objects[0].1.metrics.baseline,
+                            objects[1].0.y + objects[1].1.metrics.baseline
+                        );
+                    }
+                }
+            }
+        });
+    }
 
     #[test]
     fn inline_image_without_explicit_size_scales_intrinsic_ratio_to_line_height() {
@@ -975,8 +1326,15 @@ mod tests {
             + image_size.width
             + WideMonoTextSystem::width_of("code_span_here", MONO, font_size);
 
-        let layout = window.update(|_, window, _| {
-            layout_flow(&items, &image_sizes, &text_style, Some(wrap_width), window)
+        let layout = window.update(|_, window, cx| {
+            layout_flow(
+                &items,
+                &image_sizes,
+                &text_style,
+                Some(wrap_width),
+                window,
+                cx,
+            )
         });
 
         assert!(
@@ -1006,7 +1364,7 @@ mod tests {
             .iter()
             .filter_map(|fragment| match fragment {
                 PositionedFragment::Text { text, origin, .. } => Some((text.trim(), origin.y)),
-                PositionedFragment::Image { .. } => None,
+                PositionedFragment::Image { .. } | PositionedFragment::Object { .. } => None,
             })
             .collect::<Vec<_>>();
         let first_y = text_lines[0].1;
@@ -1059,8 +1417,8 @@ mod tests {
                 },
             ];
             let image_sizes = vec![Some(size(px(10.), px(10.))), None];
-            let layout = window.update(|_, window, _| {
-                layout_flow(&items, &image_sizes, &style, Some(px(100.)), window)
+            let layout = window.update(|_, window, cx| {
+                layout_flow(&items, &image_sizes, &style, Some(px(100.)), window, cx)
             });
             assert!(layout.size.width <= px(100.), "{text:?}: {:?}", layout.size);
             let reconstructed: String = layout
@@ -1075,12 +1433,15 @@ mod tests {
         }
     }
     #[test]
-    fn inline_code_size_is_relative_and_shares_the_body_baseline() {
+    fn inline_code_size_is_relative_and_uses_the_native_body_baseline() {
         use super::super::inline::test_fonts::{BODY, MONO, WideMonoTextSystem};
         use gpui::{Empty, TestApp};
+
         let mut app = TestApp::with_text_system(Arc::new(WideMonoTextSystem));
         let mut window = app.open_window(|_, _| Empty);
-        for body_size in [16., 24.] {
+        // These are the 16px body size and the example-markdown preview's
+        // 1.25x/1.5x inherited text-size zooms.
+        for body_size in [16., 20., 24.] {
             let style = TextStyle {
                 font_family: BODY.into(),
                 font_size: AbsoluteLength::Pixels(px(body_size)),
@@ -1098,8 +1459,8 @@ mod tests {
                     },
                 )],
             }];
-            window.update(|_, window, _| {
-                let layout = layout_flow(&items, &[None], &style, None, window);
+            window.update(|_, window, cx| {
+                let layout = layout_flow(&items, &[None], &style, None, window, cx);
                 let text_fragments = layout
                     .fragments
                     .iter()
@@ -1124,16 +1485,63 @@ mod tests {
                     WideMonoTextSystem::width_of("code", MONO, px(body_size * 0.875))
                         + px(INLINE_CODE_PADDING * 2.)
                 );
-                let baseline = |family, fragment: &(&str, Pixels, Pixels, Size<Pixels>)| {
-                    let font = window.text_system().resolve_font(&gpui::font(family));
-                    fragment.2
-                        + window
-                            .text_system()
-                            .baseline_offset(font, fragment.1, fragment.3.height)
-                };
-                assert!(
-                    (baseline(BODY, &text_fragments[0]) - baseline(MONO, &text_fragments[1])).abs()
-                        < px(0.01)
+
+                // GPUI paints shaped lines with positive `LineLayout::descent`.
+                // Derive the ordinary body glyph baseline directly from that
+                // native-compatible shaped line, rather than `baseline_offset`,
+                // whose FontMetrics descent is intentionally signed.
+                let body_runs = text_runs(1, &style, &[]);
+                let body_line = shape_line("a".into(), px(body_size), &body_runs, window);
+                let body_line_height = window.pixel_snap(
+                    window
+                        .line_height()
+                        .max(body_line.ascent + body_line.descent),
+                );
+                let plain_body_baseline = (body_line_height - body_line.ascent - body_line.descent)
+                    / 2.
+                    + body_line.ascent;
+                let mut painted_glyph_baseline =
+                    |fragment: &(&str, Pixels, Pixels, Size<Pixels>)| {
+                        let runs = if fragment.0 == "code" {
+                            text_runs(
+                                fragment.0.len(),
+                                &style,
+                                &[(
+                                    0..fragment.0.len(),
+                                    InlineHighlight {
+                                        font_family: Some(MONO.into()),
+                                        font_size_scale: Some(0.875),
+                                        ..Default::default()
+                                    },
+                                )],
+                            )
+                        } else {
+                            text_runs(fragment.0.len(), &style, &[])
+                        };
+                        let shaped = shape_line(fragment.0.into(), fragment.1, &runs, window);
+                        fragment.2
+                            + (fragment.3.height - shaped.ascent - shaped.descent) / 2.
+                            + shaped.ascent
+                    };
+
+                // `origin` is passed unchanged to Inline::paint_origin, so this
+                // checks the first body glyph's painted row position, not only
+                // the enclosing paragraph height. It must agree with a normal
+                // body line and with the adjacent inline-code glyph baseline.
+                assert_eq!(
+                    text_fragments[0].2,
+                    Pixels::ZERO,
+                    "{body_size}px body origin"
+                );
+                assert_eq!(
+                    painted_glyph_baseline(&text_fragments[0]),
+                    plain_body_baseline,
+                    "{body_size}px body glyph baseline"
+                );
+                assert_eq!(
+                    painted_glyph_baseline(&text_fragments[1]),
+                    plain_body_baseline,
+                    "{body_size}px code glyph baseline"
                 );
             });
         }

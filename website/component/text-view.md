@@ -202,7 +202,7 @@ MarkdownNode::new("ticker", TickerNode { symbol })
 
 ## Block Plugins
 
-Custom Markdown rendering currently supports block plugins. Return `true` from `is_block()` for plugins that should be registered today:
+Return `true` from `is_block()` to use the block parser and renderer:
 
 ```rust
 fn is_block(&self) -> bool {
@@ -210,7 +210,7 @@ fn is_block(&self) -> bool {
 }
 ```
 
-Inline plugins are reserved for future `TextView` support.
+Inline plugins use the default `is_block() == false` and return `Option<InlineElement>` from `render_inline`. Wrap any GPUI element with `InlineElement::new(...)`, use native styles and events, and set an optional baseline. TextView measures and selects the whole element as one atom, with plain/Markdown copying, text fallback, and explicit asynchronous layout invalidation. See [Inline plugin](../base/text-view.md#inline-plugin) for the contract and `.plugin(...)` registration example. The component facade exports the same `InlineElement` and `InlineRenderContext` types.
 
 ## YAML Frontmatter
 

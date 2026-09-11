@@ -144,9 +144,9 @@ MarkdownNode::new("ticker", TickerNode { symbol })
 - `text` 是纯文本表示，用于选择和未注册 renderer 时的回退渲染。
 - `markdown` 是 Markdown 表示，用于将文档重新序列化为 Markdown。
 
-## Block 插件
+## Block plugin
 
-当前自定义 Markdown 渲染支持 block 插件。现在可注册的插件需要在 `is_block()` 中返回 `true`：
+Block plugin 在 `is_block()` 中返回 `true`，使用 block parser 和 renderer：
 
 ```rust
 fn is_block(&self) -> bool {
@@ -154,7 +154,7 @@ fn is_block(&self) -> bool {
 }
 ```
 
-Inline 插件保留给未来的 `TextView` 支持。
+Inline plugin 保留默认的 `is_block() == false`，`render_inline` 返回 `Option<InlineElement>`。通过 `InlineElement::new(...)` 包裹任意 GPUI 元素，使用原生样式与事件，并按需指定基线。TextView 将整个元素作为原子对象测量和选择，支持纯文本与 Markdown 复制、文本降级和异步布局失效。契约与 `.plugin(...)` 注册示例详见[Inline plugin](../base/text-view.md#inline-plugin)。Component 层导出相同的 `InlineElement` 和 `InlineRenderContext` 类型。
 
 ## YAML Frontmatter
 

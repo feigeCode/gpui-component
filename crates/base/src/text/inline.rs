@@ -166,7 +166,10 @@ pub(super) struct Inline {
     links: Rc<Vec<(Range<usize>, LinkMark)>>,
     highlights: Vec<(Range<usize>, InlineHighlight)>,
     styled_text: StyledText,
+    /// The resolved style from a parent deferred layout, when there is one.
+    text_style: Option<TextStyle>,
     paint_origin: Option<Point<Pixels>>,
+    selection_bounds: Option<Bounds<Pixels>>,
     selection_source: Option<(Arc<Mutex<InlineState>>, Range<usize>)>,
     link_click_handler: Option<Arc<LinkClickHandlerFn>>,
 
@@ -208,16 +211,29 @@ impl Inline {
             highlights,
             text: text.clone(),
             styled_text: StyledText::new(text),
+            text_style: None,
             paint_origin: None,
+            selection_bounds: None,
             selection_source: None,
             link_click_handler,
             state,
         }
     }
 
+    /// Use the resolved style captured by a deferred parent layout.
+    pub(super) fn text_style(mut self, text_style: TextStyle) -> Self {
+        self.text_style = Some(text_style);
+        self
+    }
+
     /// Preserve the shared inline-flow baseline through GPUI's element-bound snapping.
     pub(super) fn paint_origin(mut self, origin: Point<Pixels>) -> Self {
         self.paint_origin = Some(origin);
+        self
+    }
+
+    pub(super) fn selection_bounds(mut self, bounds: Bounds<Pixels>) -> Self {
+        self.selection_bounds = Some(bounds);
         self
     }
 
@@ -280,7 +296,35 @@ impl Inline {
             return (is_selectable, true, Some((0..self.text.len()).into()));
         }
 
+        if text_view_state.preserve_inline_selection {
+            let selection = if let Some((source, range)) = &self.selection_source {
+                source
+                    .lock()
+                    .ok()
+                    .and_then(|state| state.selection)
+                    .and_then(|selection| {
+                        let start = selection.start.max(range.start);
+                        let end = selection.end.min(range.end);
+                        (start < end)
+                            .then(|| Selection::new(start - range.start, end - range.start))
+                    })
+            } else {
+                self.state.lock().ok().and_then(|state| state.selection)
+            };
+            return (true, selection.is_some(), selection);
+        }
+
         if let Some(selection) = text_view_state.multi_click_selection() {
+            if selection.kind == TextViewMultiClickKind::Line {
+                return (
+                    true,
+                    true,
+                    selection
+                        .line_bounds
+                        .filter(|row| row.contains(&bounds.center()))
+                        .map(|_| Selection::new(0, self.text.len())),
+                );
+            }
             return (
                 is_selectable,
                 true,
@@ -339,8 +383,19 @@ impl Inline {
                 }
             }
 
-            if point_in_text_selection(pos, char_width, selection_start, selection_end, line_height)
-            {
+            let selection_pos = self
+                .selection_bounds
+                .map_or(pos, |bounds| point(pos.x, bounds.top()));
+            let selection_height = self
+                .selection_bounds
+                .map_or(line_height, |bounds| bounds.size.height);
+            if point_in_text_selection(
+                selection_pos,
+                char_width,
+                selection_start,
+                selection_end,
+                selection_height,
+            ) {
                 if selection.is_none() {
                     selection = Some((offset..offset).into());
                 }
@@ -509,7 +564,10 @@ impl Element for Inline {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let text_style = window.text_style();
+        let text_style = self
+            .text_style
+            .clone()
+            .unwrap_or_else(|| window.text_style());
         let runs = text_runs(self.text.len(), &text_style, &self.highlights);
 
         self.styled_text = StyledText::new(self.text.clone()).with_runs(runs);
@@ -567,10 +625,6 @@ impl Element for Inline {
         let bounds = Bounds::new(self.paint_origin.unwrap_or(bounds.origin), bounds.size);
         let current_view = window.current_view();
         let hitbox = prepaint;
-        let Ok(mut state) = self.state.lock() else {
-            return;
-        };
-
         let text_layout = self.styled_text.layout().clone();
         self.styled_text
             .paint(global_id, None, bounds, &mut (), &mut (), window, cx);
@@ -578,6 +632,10 @@ impl Element for Inline {
         // layout selections
         let (is_selectable, is_selection, selection) =
             self.layout_selections(&text_layout, &bounds, window, cx);
+
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
 
         state.selection = selection;
         if let Some((source, range)) = &self.selection_source
@@ -628,11 +686,25 @@ impl Element for Inline {
                 let inline_state = self.state.clone();
                 let text = self.text.clone();
                 let text_view_state = GlobalState::global(cx).text_view_state().cloned();
+                let line_bounds = self.selection_bounds;
                 move |event: &MouseDownEvent, phase, window, cx| {
                     if !phase.bubble()
                         || !hitbox.is_hovered(window)
                         || event.button != MouseButton::Left
                     {
+                        return;
+                    }
+
+                    if event.click_count == 3
+                        && let Some(line_bounds) = line_bounds
+                    {
+                        GlobalState::suppress_text_selection(cx);
+                        if let Some(view) = &text_view_state {
+                            view.update(cx, |state, cx| {
+                                state.set_multi_click_line(line_bounds, cx)
+                            });
+                        }
+                        cx.notify(current_view);
                         return;
                     }
 
@@ -757,12 +829,14 @@ fn selection_for_multi_click(
         // Known limitation: a paragraph maps to a single Inline run here. When a
         // paragraph embeds an inline image it is split into multiple Inline runs,
         // so triple-click only selects the run on the clicked side of the image.
-        TextViewMultiClickKind::Paragraph => (!text.is_empty()).then_some(0..text.len()),
+        TextViewMultiClickKind::Paragraph | TextViewMultiClickKind::Line => {
+            (!text.is_empty()).then_some(0..text.len())
+        }
     }
 }
 
 /// Check if a `pos` is within a `bounds`, considering multi-line selections.
-fn point_in_text_selection(
+pub(super) fn point_in_text_selection(
     pos: Point<Pixels>,
     char_width: Pixels,
     selection_start: Point<Pixels>,
@@ -808,11 +882,59 @@ fn point_in_text_selection(
 /// wide as every other family, so a measurement that ignores the family of a
 /// run comes out visibly short.
 #[cfg(test)]
+pub(super) mod test_draw {
+    use gpui::{App, Context, IntoElement, Render, Styled as _, TestApp, Window, canvas, px};
+    use std::{cell::RefCell, rc::Rc};
+
+    struct Probe {
+        body: Option<Box<dyn FnOnce(&mut Window, &mut App)>>,
+    }
+
+    impl Render for Probe {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let body = self.body.take();
+            canvas(
+                move |_, window, cx| {
+                    if let Some(body) = body {
+                        body(window, cx);
+                    }
+                },
+                |_, _, _, _| {},
+            )
+            .w(px(1000.))
+            .h(px(1000.))
+        }
+    }
+
+    /// Runs `f` inside a real prepaint pass and returns its value.
+    ///
+    /// Measuring an inline object lays its GPUI element out through the
+    /// window, which GPUI only permits while a frame is being drawn, so a test
+    /// that builds a real element cannot call the measurement helpers straight
+    /// from `TestAppWindow::update`.
+    pub(crate) fn in_prepaint<R: 'static>(
+        app: &mut TestApp,
+        f: impl FnOnce(&mut Window, &mut App) -> R + 'static,
+    ) -> R {
+        let slot: Rc<RefCell<Option<R>>> = Rc::new(RefCell::new(None));
+        let out = slot.clone();
+        let mut window = app.open_window(|_, _| Probe {
+            body: Some(Box::new(move |window, cx| {
+                *out.borrow_mut() = Some(f(window, cx));
+            })),
+        });
+        window.draw();
+        let value = slot.borrow_mut().take();
+        value.expect("prepaint probe did not run")
+    }
+}
+
+#[cfg(test)]
 pub(super) mod test_fonts {
     use gpui::{
-        Bounds, DevicePixels, Font, FontId, FontMetrics, FontRun, GlyphId, LineLayout, Pixels,
-        PlatformTextSystem, RenderGlyphParams, ShapedGlyph, ShapedRun, Size, TextRenderingMode,
-        point, px, size,
+        Bounds, DevicePixels, Font, FontId, FontMetrics, FontRun, FontWeight, GlyphId, LineLayout,
+        Pixels, PlatformTextSystem, RenderGlyphParams, ShapedGlyph, ShapedRun, Size,
+        TextRenderingMode, point, px, size,
     };
     use std::borrow::Cow;
 
@@ -820,6 +942,8 @@ pub(super) mod test_fonts {
     pub(crate) const MONO: &str = "Mono";
     const BODY_ID: FontId = FontId(1);
     const MONO_ID: FontId = FontId(2);
+    const BOLD_BODY_ID: FontId = FontId(3);
+    const BOLD_MONO_ID: FontId = FontId(4);
     const UNITS_PER_EM: f32 = 1000.;
 
     pub(crate) struct WideMonoTextSystem;
@@ -827,7 +951,13 @@ pub(super) mod test_fonts {
     impl WideMonoTextSystem {
         /// Advance of one glyph in `font_id`, in em units.
         fn advance_units(font_id: FontId) -> f32 {
-            if font_id == MONO_ID { 1000. } else { 500. }
+            match font_id {
+                MONO_ID => 1000.,
+                BOLD_MONO_ID => 1250.,
+                BODY_ID => 500.,
+                BOLD_BODY_ID => 750.,
+                _ => 500.,
+            }
         }
 
         /// Width of `text` shaped entirely in `family` at `font_size`.
@@ -847,11 +977,17 @@ pub(super) mod test_fonts {
         }
 
         fn font_id(&self, descriptor: &Font) -> anyhow::Result<FontId> {
-            Ok(if descriptor.family.as_ref() == MONO {
-                MONO_ID
-            } else {
-                BODY_ID
-            })
+            Ok(
+                match (
+                    descriptor.family.as_ref() == MONO,
+                    descriptor.weight == FontWeight::BOLD,
+                ) {
+                    (true, true) => BOLD_MONO_ID,
+                    (true, false) => MONO_ID,
+                    (false, true) => BOLD_BODY_ID,
+                    (false, false) => BODY_ID,
+                },
+            )
         }
 
         fn font_metrics(&self, _font_id: FontId) -> FontMetrics {
@@ -933,7 +1069,8 @@ pub(super) mod test_fonts {
                 font_size,
                 width: position,
                 ascent: font_size * (metrics.ascent / UNITS_PER_EM),
-                descent: font_size * (metrics.descent / UNITS_PER_EM),
+                // Native backends normalize the signed font metric for shaped lines.
+                descent: font_size * (-metrics.descent / UNITS_PER_EM),
                 runs: shaped_runs,
                 len: text.len(),
             }

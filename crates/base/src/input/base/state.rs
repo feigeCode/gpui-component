@@ -2452,25 +2452,29 @@ impl<M: InputModeKind> InputBaseState<M> {
 
         let row = point.row;
 
-        // Calculate row offset by multiplying the number of lines before it with the line height
-        let mut row_offset_y = line_height * self.display_map.buffer_line_to_display_row(row);
+        // Resolve the wrapped row even when the target is outside the last layout.
+        let display_pos = self
+            .display_map
+            .buffer_pos_to_display_pos(crate::input::BufferPoint::new(row, point.column));
+        let row_offset_y = line_height * display_pos.row;
 
         // For Right alignment use 0 margin: the cursor indicator is clamped inside bounds
-        // in layout_cursor, so shifting the text here would cause a first-click visual jump.
+        // in layout_cursors, so shifting the text here would cause a first-click visual jump.
         let safety_margin = match last_layout.text_align {
             TextAlign::Left => RIGHT_MARGIN,
             TextAlign::Right => px(0.),
             TextAlign::Center => CURSOR_WIDTH,
         };
-        if let Some(line) = last_layout
-            .lines
-            .get(row.saturating_sub(last_layout.visible_range.start))
+        if let Some(vi) = last_layout
+            .visible_buffer_lines
+            .iter()
+            .position(|&line| line == row)
         {
-            // Check to scroll horizontally and soft wrap lines
-            if let Some(pos) = line.position_for_index(point.column, last_layout, false) {
+            let line = &last_layout.lines[vi];
+            let local_offset = offset.saturating_sub(last_layout.visible_line_byte_offsets[vi]);
+            if let Some(pos) = line.position_for_index(local_offset, last_layout, false) {
                 let bounds_width = bounds.size.width - last_layout.line_number_width;
                 let col_offset_x = pos.x;
-                row_offset_y += pos.y;
                 if col_offset_x - safety_margin < -scroll_offset.x {
                     // If the position is out of the visible area, scroll to make it visible
                     scroll_offset.x = -col_offset_x + safety_margin;
@@ -2481,7 +2485,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         }
 
         // Scroll the row into view. Use the same edge clearance helper as
-        // `TextElement::layout_cursor` so both scroll-into-view paths agree
+        // `TextElement::layout_cursors` so both scroll-into-view paths agree
         // (a mismatch flickered on `Down` at end-of-buffer with a small
         // `cursor_surrounding_lines` override).
         let edge_height =
@@ -2489,7 +2493,7 @@ impl<M: InputModeKind> InputBaseState<M> {
                 super::element::cursor_surrounding_padding(
                     self.mode.is_auto_grow(),
                     self.cursor_surrounding_lines,
-                    last_layout.visible_range.len(),
+                    super::element::viewport_visible_lines(bounds.size.height, line_height),
                     line_height,
                 )
             } else {
@@ -4910,6 +4914,45 @@ mod tests {
                 target_y + line_height * 3.
                     <= state.last_bounds.as_ref().unwrap().size.height + px(0.1),
                 "search must preserve the configured surrounding-line padding"
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn test_search_reveals_offscreen_wrapped_match(cx: &mut TestAppContext) {
+        let input_view = InputView::new(cx);
+        let mut cx = VisualTestContext::from_window(input_view.window_handle.into(), cx);
+        let input = input_view.input;
+        let text = format!(
+            "match\n{}\n{}match\n{}",
+            "line\n".repeat(80),
+            "wrapped text ".repeat(500),
+            "line\n".repeat(80)
+        );
+        cx.update(|window, cx| {
+            input.update(cx, |state, cx| {
+                state.set_cursor_surrounding_lines(Some(3), window, cx);
+                state.set_value(text, window, cx);
+                state.set_search_query("match", true, cx);
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            input.update(cx, |state, cx| {
+                state.next_search_match(cx).unwrap();
+            });
+        });
+        cx.run_until_parked();
+        input.read_with(&cx, |state, _| {
+            let range = state.search_session.matcher.matched_ranges()[1].clone();
+            let layout = state.last_layout.as_ref().unwrap();
+            let (_, _, position) = state.line_and_position_for_offset(range.end);
+            let y = position.expect("wrapped match must be laid out").y
+                + state.scroll_handle.offset().y;
+            assert!(y >= layout.line_height * 2. - px(0.1));
+            assert!(
+                y + layout.line_height * 3. <= state.last_bounds.unwrap().size.height + px(0.1),
+                "wrapped match must retain surrounding display rows"
             );
         });
     }
