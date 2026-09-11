@@ -3895,17 +3895,14 @@ mod tests {
         let events: Rc<RefCell<Vec<(usize, usize)>>> = Rc::new(RefCell::new(Vec::new()));
         let events_for_sub = events.clone();
         let _sub = cx.update(|_, cx| {
-            cx.subscribe(
-                &editor,
-                move |_, event: &InputEvent, _| {
-                    if let InputEvent::GutterMarkerMouseDown {
-                        index, logical_row, ..
-                    } = event
-                    {
-                        events_for_sub.borrow_mut().push((*index, *logical_row));
-                    }
-                },
-            )
+            cx.subscribe(&editor, move |_, event: &InputEvent, _| {
+                if let InputEvent::GutterMarkerMouseDown {
+                    index, logical_row, ..
+                } = event
+                {
+                    events_for_sub.borrow_mut().push((*index, *logical_row));
+                }
+            })
         });
 
         let lane = cx.update(|_window, cx| {

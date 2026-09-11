@@ -785,9 +785,7 @@ impl InlineWidgets {
     }
 
     fn get(&self, id: DecorationCollectionId) -> Option<&[InlineWidget]> {
-        self.entries
-            .get(&id)
-            .map(|widgets| widgets.as_slice())
+        self.entries.get(&id).map(|widgets| widgets.as_slice())
     }
 
     pub(super) fn adjust_for_edit(&mut self, edited_range: &Range<usize>, inserted_len: usize) {
