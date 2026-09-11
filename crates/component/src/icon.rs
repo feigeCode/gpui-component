@@ -356,4 +356,56 @@ mod tests {
         let icon = icon.path("");
         assert!(matches!(icon.source_ref(), IconSource::Path(path) if path.is_empty()));
     }
+
+    /// Local extension (not present upstream): `Icon` carries a mono/color rendering
+    /// mode so brand and product marks can keep their intrinsic colors. Upstream
+    /// removed this in gpui-kit#3020. These fail loudly if a rebase drops it.
+    #[test]
+    fn test_icon_color_mode_defaults_to_mono_and_can_be_overridden() {
+        assert_eq!(Icon::default().resolved_color_mode(), IconColorMode::Mono);
+        assert_eq!(
+            Icon::default().color().resolved_color_mode(),
+            IconColorMode::Color
+        );
+        assert_eq!(
+            Icon::default().color().mono().resolved_color_mode(),
+            IconColorMode::Mono
+        );
+        assert_eq!(
+            Icon::default()
+                .color_mode(IconColorMode::Color)
+                .resolved_color_mode(),
+            IconColorMode::Color
+        );
+    }
+
+    #[test]
+    fn test_icon_inherits_color_mode_from_named_icon() {
+        struct Branded;
+        impl IconNamed for Branded {
+            fn path(self) -> SharedString {
+                "icons/branded.svg".into()
+            }
+
+            fn color_mode(&self) -> IconColorMode {
+                IconColorMode::Color
+            }
+        }
+
+        struct Outline;
+        impl IconNamed for Outline {
+            fn path(self) -> SharedString {
+                "icons/outline.svg".into()
+            }
+        }
+
+        assert_eq!(
+            Icon::new(Branded).resolved_color_mode(),
+            IconColorMode::Color
+        );
+        assert_eq!(
+            Icon::new(Outline).resolved_color_mode(),
+            IconColorMode::Mono
+        );
+    }
 }

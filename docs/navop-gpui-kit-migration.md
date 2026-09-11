@@ -183,6 +183,38 @@ CE 的 `gpui-ce`（git `feigeCode/gpui-ce`）带有三个 gpui 层补丁，切�
 - `cargo test -p gpui-component --lib icon`：18 个测试通过。
 - color_mode 检测已用 CE fork 的 ground-truth 断言（`MongoDB`/`Redis`/`Database`/`Terminal`/`Vnc`/`Procedure`/`FolderFunctions`/`StatusConnectedLocked` = Color；`RdpLine`/`VncLine`/`Monitor`/`Paste` = Mono）逐一验证，与 fork 行为一致。
 
+### 6.4 上游已删除彩色图标能力 —— 本分支必须保留（重要）
+
+上游 `longbridge/gpui-kit` 的 PR **#3020**（`assets: share Lucide icon names and preserve default icons`，2026-09-08 合并）连带移除了整套彩色渲染：
+
+- `crates/assets/src/icon.rs`：删除 `IconColorMode` 枚举与 `IconNamed::color_mode()`，`IconNamed` 只剩 `path()`。
+- `crates/component/src/icon.rs`：删除 `Icon::color_mode` 字段、`color()` / `mono()` / `color_mode()` / `into_color_element()`，渲染统一走 `into_svg()` + `currentColor`。
+
+该 PR 描述只讲 Lucide 目录共享，**未提及移除彩色渲染**，但从 diff 看是连带结果（上游现在所有图标按单色渲染）。
+
+**为什么不能跟进**：
+
+- navop 的 249 个图标里有品牌 / DB / 发行版 logo（`Ai`、`MongoDB`、`Redis`、`PostgreSQLColor` 等）需要保留原色。
+- `crates/one-assets/build.rs` 为每个变体生成 `fn color_mode() -> gpui_component::IconColorMode`。跟进上游新版会**编译失败**，且彩色图标全部退化成单色。
+
+**决定**：本分支**不跟进**该删除，mono/color 双渲染路径作为**本地扩展**保留。
+
+**防倒退保护**（避免未来 rebase 时被静默覆盖）：
+
+`crates/component/src/icon.rs` 新增两个回归测试：
+
+- `test_icon_color_mode_defaults_to_mono_and_can_be_overridden`
+- `test_icon_inherits_color_mode_from_named_icon` —— 覆盖 `Icon::build` 从 `IconNamed::color_mode()` 继承，这正是 navop 的依赖点。
+
+> 同步上游 `crates/component/src/icon.rs` 或 `crates/assets/src/icon.rs` 时，必须保住 `IconColorMode` + `color_mode()` + `into_color_element()`。若这两个测试变红或消失，说明本地扩展被覆盖了。
+
+**已作废、别再重复劳动的提交**：
+
+- `c3327f64`（`Icon::file_path`）与 `4f3b640c`（删除 `file_path`，改用 `Icon::data`）：**互相抵消，净效果为 0**，且上游已有 `Icon::data`（#2980）。二者只留下 `Spinner::animation_id` 有价值 —— navop 重度使用（`sql_editor.rs`、`ai_chat_view` 的 `message_view`/`agent_view`，含独立测试）。
+- `98b8aa71`（`Icon::resolved_color_mode`）：有效，但**只在本地有意义**（上游已无 `color_mode` 可读），不发上游。
+
+**后续**：若想长期摆脱分叉，可在上游提 issue 说明彩色图标场景（品牌 logo），视维护者态度再决定是否收敛。
+
 ---
 
 ## 七、Shell 迁移现状与剩余阻塞点
