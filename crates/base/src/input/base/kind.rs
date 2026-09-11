@@ -235,6 +235,9 @@ pub trait InputModeKind: sealed::Sealed + Sized + 'static {
     ) {
     }
 
+    /// Records a successful document mutation after validation and normalization.
+    fn document_did_change(_state: &mut InputBaseState<Self>) {}
+
     /// Refreshes language-server state after the text changed.
     fn refresh_language_features(
         _state: &mut InputBaseState<Self>,

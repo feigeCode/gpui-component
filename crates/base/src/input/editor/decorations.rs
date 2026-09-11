@@ -159,6 +159,8 @@ impl InlineWidget {
 
 #[derive(Default)]
 pub(crate) struct EditorAnnotations {
+    pub(crate) document_revision: u64,
+    pub(crate) completion_epoch: u64,
     pub(crate) gutter_markers: Vec<GutterMarker>,
     pub(crate) gutter_lane_reserved: bool,
     pub(crate) gutter_marker_bounds: Rc<RefCell<HashMap<SharedString, Bounds<Pixels>>>>,
@@ -439,6 +441,11 @@ impl InputBaseState<EditorMode> {
             state: cx.entity().downgrade(),
             id,
         }
+    }
+
+    /// Monotonic content revision. Selection, focus and scrolling do not change it.
+    pub fn document_revision(&self) -> u64 {
+        self.extras.annotations.document_revision
     }
 
     /// Replace all gutter markers. The marker lane remains reserved after first use.

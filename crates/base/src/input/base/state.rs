@@ -3492,6 +3492,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             self.text.replace(range.clone(), new_text);
 
             M::adjust_annotations(self, range, new_text.len());
+            M::document_did_change(self);
             recorded |= self.push_history(
                 &old_text,
                 range,
@@ -3837,12 +3838,16 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
             }
         }
 
-        if mask_changed {
-            // Masking rewrites the whole document, so ranges recorded against
-            // the old text no longer point at anything.
-            M::reset_annotations(self);
-        } else {
-            M::adjust_annotations(self, &range, new_text.len());
+        let document_changed = old_text != self.text;
+        if document_changed {
+            if mask_changed {
+                // Masking rewrites the whole document, so ranges recorded against
+                // the old text no longer point at anything.
+                M::reset_annotations(self);
+            } else {
+                M::adjust_annotations(self, &range, new_text.len());
+            }
+            M::document_did_change(self);
         }
         if mask_changed {
             // A segment-based history entry no longer matches the masked
@@ -3972,7 +3977,10 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
             }
         }
 
-        M::adjust_annotations(self, &range, new_text.len());
+        if old_text != self.text {
+            M::adjust_annotations(self, &range, new_text.len());
+            M::document_did_change(self);
+        }
         if let Some(diagnostics) = self.mode.diagnostics_mut() {
             diagnostics.reset(&self.text)
         }

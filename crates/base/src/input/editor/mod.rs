@@ -53,6 +53,14 @@ impl InputModeKind for EditorMode {
         state.extras.annotations.adjust_for_edit(range, new_len);
     }
 
+    fn document_did_change(state: &mut InputBaseState<Self>) {
+        state.extras.annotations.document_revision =
+            state.extras.annotations.document_revision.saturating_add(1);
+        state.extras.annotations.completion_epoch =
+            state.extras.annotations.completion_epoch.saturating_add(1);
+        state.extras.inline_completion.item = None;
+    }
+
     fn refresh_language_features(
         state: &mut InputBaseState<Self>,
         window: &mut Window,
