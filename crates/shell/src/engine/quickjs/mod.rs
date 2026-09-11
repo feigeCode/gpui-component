@@ -3788,7 +3788,8 @@ impl ShellRuntime {
                 InputEvent::Change
                 | InputEvent::Focus
                 | InputEvent::Blur
-                | InputEvent::GutterMarkerMouseDown { .. } => {}
+                | InputEvent::GutterMarkerMouseDown { .. }
+                | InputEvent::GutterMarkerActivated { .. } => {}
             }
             handler.call::<_, ()>((
                 payload,

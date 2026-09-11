@@ -26,7 +26,7 @@ use std::rc::Rc;
 use gpui::{Div, Entity, Stateful, Window};
 use ropey::Rope;
 
-use super::decorations::{DecorationCollections, EditorAnnotations};
+use super::decorations::{DecorationCollections, EditorAnnotations, GutterLaneView, GutterLanes};
 use super::lsp::{ContextMenuContent, HoverDefinition, InlineCompletion};
 use crate::input::{
     HighlightStyleResolver, InputEdit, InputHighlighter, RangeDecoration, SyntaxContext,
@@ -86,6 +86,16 @@ pub trait InputExtras: Default + 'static {
     /// Geometric decorations intersecting visible, non-folded buffer spans.
     fn range_decorations(&self, _ranges: &[std::ops::Range<usize>]) -> Vec<&RangeDecoration> {
         Vec::new()
+    }
+
+    /// Render-time snapshots of the editor's gutter lanes, in stacking order.
+    fn gutter_lane_views(&self) -> Vec<GutterLaneView> {
+        Vec::new()
+    }
+
+    /// Total width reserved by gutter lanes that currently contribute a column.
+    fn gutter_lane_reserved_width(&self) -> gpui::Pixels {
+        gpui::px(0.)
     }
 
     /// Semantic-token styles for a visible range, when an LSP supplies them.
@@ -352,6 +362,7 @@ pub struct EditorExtras {
     pub(crate) hover_definition: HoverDefinition,
     pub(crate) context_menu_task: Task<anyhow::Result<()>>,
     pub(crate) annotations: EditorAnnotations,
+    pub(crate) gutter_lanes: GutterLanes,
 }
 
 impl Default for EditorExtras {
@@ -366,6 +377,7 @@ impl Default for EditorExtras {
             hover_definition: HoverDefinition::default(),
             context_menu_task: Task::ready(Ok(())),
             annotations: EditorAnnotations::default(),
+            gutter_lanes: GutterLanes::default(),
         }
     }
 }

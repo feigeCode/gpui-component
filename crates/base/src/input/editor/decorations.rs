@@ -1,7 +1,15 @@
 use crate::input::EditorMode;
-use std::{collections::BTreeMap, ops::Range};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, HashMap},
+    ops::Range,
+    rc::Rc,
+};
 
-use gpui::{App, Context, HighlightStyle, Hsla, WeakEntity};
+use gpui::{
+    AnyElement, App, Bounds, Context, FocusHandle, HighlightStyle, Hsla, Pixels, SharedString,
+    WeakEntity, Window, px,
+};
 use ropey::Rope;
 use sum_tree::Bias;
 
@@ -228,6 +236,401 @@ impl RangeDecorationCollection {
                     .collect()
             })
             .unwrap_or_default()
+    }
+}
+
+/// Width reserved for one gutter lane cell.
+pub(crate) const GUTTER_LANE_HITBOX_WIDTH: Pixels = px(22.);
+
+/// A single marker anchored to a logical buffer row in a gutter lane.
+///
+/// Markers carry no public identity; a marker's identity is its lane handle plus
+/// its position in that lane's insertion-ordered list. Row numbers do not move
+/// with edits: re-project markers from your own semantic source when you need
+/// them to follow text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GutterMarker {
+    row: usize,
+    icon: SharedString,
+    tooltip: Option<SharedString>,
+    enabled: bool,
+}
+
+impl GutterMarker {
+    pub fn new(row: usize, icon: impl Into<SharedString>) -> Self {
+        Self {
+            row,
+            icon: icon.into(),
+            tooltip: None,
+            enabled: true,
+        }
+    }
+
+    pub fn row(&self) -> usize {
+        self.row
+    }
+
+    pub fn icon(&self) -> &SharedString {
+        &self.icon
+    }
+
+    pub fn tooltip(&self) -> Option<&SharedString> {
+        self.tooltip.as_ref()
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn with_tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
+        self.tooltip = Some(tooltip.into());
+        self
+    }
+
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+}
+
+/// Application-owned presentation for a gutter marker.
+pub type GutterMarkerRenderer = Rc<dyn Fn(&GutterMarker) -> AnyElement>;
+
+/// Per-lane configuration.
+#[derive(Clone)]
+pub struct GutterLaneOptions {
+    width: Pixels,
+    reserve_when_empty: bool,
+    renderer: GutterMarkerRenderer,
+    label: Option<SharedString>,
+}
+
+impl GutterLaneOptions {
+    pub fn new(renderer: impl Fn(&GutterMarker) -> AnyElement + 'static) -> Self {
+        Self {
+            width: GUTTER_LANE_HITBOX_WIDTH,
+            reserve_when_empty: false,
+            renderer: Rc::new(renderer),
+            label: None,
+        }
+    }
+
+    pub fn width(mut self, width: Pixels) -> Self {
+        self.width = width;
+        self
+    }
+
+    pub fn reserve_when_empty(mut self, reserve: bool) -> Self {
+        self.reserve_when_empty = reserve;
+        self
+    }
+
+    /// A stable name, also used as the lane's accessibility label.
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub fn lane_width(&self) -> Pixels {
+        self.width
+    }
+
+    pub fn reserves_when_empty(&self) -> bool {
+        self.reserve_when_empty
+    }
+
+    pub fn label_text(&self) -> Option<&SharedString> {
+        self.label.as_ref()
+    }
+
+    pub fn renderer(&self) -> &GutterMarkerRenderer {
+        &self.renderer
+    }
+}
+
+/// An independently owned column of gutter markers.
+///
+/// Clones address the same lane. Dropping a handle does not clear it; use
+/// [`Self::clear`] to empty it or [`Self::dispose`] to release it. Operations on
+/// a disposed lane or a dropped editor are harmless no-ops.
+#[derive(Clone, Debug)]
+pub struct GutterLane {
+    state: WeakEntity<InputBaseState<EditorMode>>,
+    id: DecorationCollectionId,
+}
+
+impl PartialEq for GutterLane {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.state.entity_id() == other.state.entity_id()
+    }
+}
+
+impl Eq for GutterLane {}
+
+impl GutterLane {
+    /// Replace this lane's markers.
+    pub fn set(&self, markers: Vec<GutterMarker>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            if state.extras.gutter_lanes.set(self.id, markers) {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Append markers, preserving insertion order.
+    pub fn append(&self, markers: Vec<GutterMarker>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            if state.extras.gutter_lanes.append(self.id, markers) {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Empty this lane without invalidating its handles.
+    pub fn clear(&self, cx: &mut App) {
+        self.set(Vec::new(), cx);
+    }
+
+    /// Release this lane, invalidating all of its cloned handles.
+    pub fn dispose(&self, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            if state.extras.gutter_lanes.remove(self.id) {
+                cx.notify();
+            }
+        });
+    }
+
+    pub fn get_markers(&self, cx: &App) -> Vec<GutterMarker> {
+        self.state
+            .read_with(cx, |state, _| {
+                state
+                    .extras
+                    .gutter_lanes
+                    .markers(self.id)
+                    .map(<[GutterMarker]>::to_vec)
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn focus_handle(&self, cx: &App) -> Option<FocusHandle> {
+        self.state
+            .read_with(cx, |state, _| state.extras.gutter_lanes.focus(self.id))
+            .ok()
+            .flatten()
+    }
+
+    /// Focus this lane so its keyboard navigation receives keys.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        if let Some(focus) = self.focus_handle(cx) {
+            focus.focus(window, cx);
+        }
+    }
+
+    pub fn active_row(&self, cx: &App) -> Option<usize> {
+        self.state
+            .read_with(cx, |state, _| state.extras.gutter_lanes.active_row(self.id))
+            .ok()
+            .flatten()
+    }
+
+    pub fn set_active_row(&self, row: Option<usize>, cx: &mut App) {
+        let _ = self.state.update(cx, |state, cx| {
+            if state.extras.gutter_lanes.set_active_row(self.id, row) {
+                cx.notify();
+            }
+        });
+    }
+
+    /// Last painted bounds of a marker index, if it was visible.
+    pub fn marker_bounds(&self, index: usize, cx: &App) -> Option<Bounds<Pixels>> {
+        self.state
+            .read_with(cx, |state, _| {
+                state
+                    .extras
+                    .gutter_lanes
+                    .bounds(self.id)
+                    .and_then(|bounds| bounds.borrow().get(&index).copied())
+            })
+            .ok()
+            .flatten()
+    }
+}
+
+/// Render-time snapshot of one lane, produced by `InputExtras::gutter_lane_views`.
+#[derive(Clone)]
+pub struct GutterLaneView {
+    lane: GutterLane,
+    width: Pixels,
+    renderer: GutterMarkerRenderer,
+    markers: Vec<GutterMarker>,
+    active_row: Option<usize>,
+    label: Option<SharedString>,
+    focus: FocusHandle,
+    bounds: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
+}
+
+impl GutterLaneView {
+    pub fn lane(&self) -> &GutterLane {
+        &self.lane
+    }
+
+    pub fn width(&self) -> Pixels {
+        self.width
+    }
+
+    pub fn renderer(&self) -> &GutterMarkerRenderer {
+        &self.renderer
+    }
+
+    pub fn markers(&self) -> &[GutterMarker] {
+        &self.markers
+    }
+
+    pub fn active_row(&self) -> Option<usize> {
+        self.active_row
+    }
+
+    pub fn label(&self) -> Option<&SharedString> {
+        self.label.as_ref()
+    }
+
+    pub fn focus_handle(&self) -> &FocusHandle {
+        &self.focus
+    }
+
+    /// Shared per-lane bounds store, filled during layout for hit testing.
+    pub(crate) fn bounds_store(&self) -> Rc<RefCell<HashMap<usize, Bounds<Pixels>>>> {
+        self.bounds.clone()
+    }
+}
+
+struct GutterLaneEntry {
+    state: WeakEntity<InputBaseState<EditorMode>>,
+    options: GutterLaneOptions,
+    markers: Vec<GutterMarker>,
+    focus: FocusHandle,
+    active_row: Option<usize>,
+    bounds: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
+}
+
+impl GutterLaneEntry {
+    fn visible_width(&self) -> Pixels {
+        if self.options.reserve_when_empty || !self.markers.is_empty() {
+            self.options.width
+        } else {
+            px(0.)
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct GutterLanes {
+    entries: BTreeMap<DecorationCollectionId, GutterLaneEntry>,
+    next_id: usize,
+}
+
+impl GutterLanes {
+    fn create(
+        &mut self,
+        state: WeakEntity<InputBaseState<EditorMode>>,
+        options: GutterLaneOptions,
+        markers: Vec<GutterMarker>,
+        focus: FocusHandle,
+    ) -> DecorationCollectionId {
+        let id = DecorationCollectionId(self.next_id);
+        self.next_id += 1;
+        self.entries.insert(
+            id,
+            GutterLaneEntry {
+                state,
+                options,
+                markers,
+                focus,
+                active_row: None,
+                bounds: Rc::new(RefCell::new(HashMap::new())),
+            },
+        );
+        id
+    }
+
+    fn set(&mut self, id: DecorationCollectionId, markers: Vec<GutterMarker>) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        entry.markers = markers;
+        entry.active_row = None;
+        entry.bounds.borrow_mut().clear();
+        true
+    }
+
+    fn append(&mut self, id: DecorationCollectionId, markers: Vec<GutterMarker>) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        entry.markers.extend(markers);
+        true
+    }
+
+    fn remove(&mut self, id: DecorationCollectionId) -> bool {
+        self.entries.remove(&id).is_some()
+    }
+
+    fn markers(&self, id: DecorationCollectionId) -> Option<&[GutterMarker]> {
+        self.entries.get(&id).map(|entry| entry.markers.as_slice())
+    }
+
+    fn focus(&self, id: DecorationCollectionId) -> Option<FocusHandle> {
+        self.entries.get(&id).map(|entry| entry.focus.clone())
+    }
+
+    fn active_row(&self, id: DecorationCollectionId) -> Option<usize> {
+        self.entries.get(&id).and_then(|entry| entry.active_row)
+    }
+
+    fn set_active_row(&mut self, id: DecorationCollectionId, row: Option<usize>) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        if entry.active_row == row {
+            return false;
+        }
+        entry.active_row = row;
+        true
+    }
+
+    fn bounds(
+        &self,
+        id: DecorationCollectionId,
+    ) -> Option<&Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>> {
+        self.entries.get(&id).map(|entry| &entry.bounds)
+    }
+
+    /// Total width reserved by every lane that currently contributes a column.
+    pub(super) fn reserved_width(&self) -> Pixels {
+        self.entries
+            .values()
+            .map(GutterLaneEntry::visible_width)
+            .fold(px(0.), |total, width| total + width)
+    }
+
+    pub(super) fn views(&self) -> Vec<GutterLaneView> {
+        self.entries
+            .iter()
+            .map(|(id, entry)| GutterLaneView {
+                lane: GutterLane {
+                    state: entry.state.clone(),
+                    id: *id,
+                },
+                width: entry.visible_width(),
+                renderer: entry.options.renderer.clone(),
+                markers: entry.markers.clone(),
+                active_row: entry.active_row,
+                label: entry.options.label.clone(),
+                focus: entry.focus.clone(),
+                bounds: entry.bounds.clone(),
+            })
+            .collect()
     }
 }
 
@@ -510,6 +913,32 @@ impl InputBaseState<EditorMode> {
     /// Monotonic content revision. Selection, focus and scrolling do not change it.
     pub fn document_revision(&self) -> u64 {
         self.extras.annotations.document_revision
+    }
+
+    /// Create an independently owned gutter column.
+    ///
+    /// Lanes stack left-to-right in creation order, after the line-number column.
+    /// A lane reserves its width when it is created with
+    /// [`GutterLaneOptions::reserve_when_empty`] or when it first holds a marker,
+    /// so the text column does not jitter as markers appear and disappear.
+    /// Marker rows are logical buffer rows and do not move with edits.
+    pub fn create_gutter_lane(
+        &mut self,
+        markers: Vec<GutterMarker>,
+        options: GutterLaneOptions,
+        cx: &mut Context<Self>,
+    ) -> GutterLane {
+        let focus = cx.focus_handle().tab_stop(true);
+        let state = cx.entity().downgrade();
+        let id = self
+            .extras
+            .gutter_lanes
+            .create(state, options, markers, focus);
+        cx.notify();
+        GutterLane {
+            state: cx.entity().downgrade(),
+            id,
+        }
     }
 
     /// Create an independently owned collection of geometric range decorations.

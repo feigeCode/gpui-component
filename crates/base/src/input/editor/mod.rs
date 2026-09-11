@@ -235,6 +235,14 @@ impl crate::input::InputExtras for super::EditorExtras {
         self.range_decorations.intersecting(ranges)
     }
 
+    fn gutter_lane_views(&self) -> Vec<super::decorations::GutterLaneView> {
+        self.gutter_lanes.views()
+    }
+
+    fn gutter_lane_reserved_width(&self) -> gpui::Pixels {
+        self.gutter_lanes.reserved_width()
+    }
+
     fn semantic_token_styles(
         &self,
         text: &ropey::Rope,

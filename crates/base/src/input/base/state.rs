@@ -128,7 +128,13 @@ pub enum InputEvent {
     Focus,
     Blur,
     GutterMarkerMouseDown {
-        marker_id: SharedString,
+        lane: super::decorations::GutterLane,
+        index: usize,
+        logical_row: usize,
+    },
+    GutterMarkerActivated {
+        lane: super::decorations::GutterLane,
+        index: usize,
         logical_row: usize,
     },
 }

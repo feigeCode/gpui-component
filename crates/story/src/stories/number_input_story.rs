@@ -156,6 +156,7 @@ impl NumberInputStory {
             InputEvent::Focus => println!("Focus"),
             InputEvent::Blur => println!("Blur"),
             InputEvent::GutterMarkerMouseDown { .. } => {}
+            InputEvent::GutterMarkerActivated { .. } => {}
         }
     }
 
