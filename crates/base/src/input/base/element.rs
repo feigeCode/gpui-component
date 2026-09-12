@@ -1424,18 +1424,25 @@ impl<M: InputModeKind> TextElement<M> {
             };
             let line = &prepaint.last_layout.lines[line_index];
             let line_offset = prepaint.last_layout.visible_line_byte_offsets[line_index];
+            let local_offset = widget.offset().saturating_sub(line_offset);
             let Some(widget_point) = line.position_for_index(
-                widget.offset().saturating_sub(line_offset),
+                local_offset,
                 &prepaint.last_layout,
                 false,
             ) else {
                 continue;
             };
+            let wrapped_row = line
+                .wrapped_lines
+                .iter()
+                .position(|range| range.start <= local_offset && local_offset <= range.end)
+                .unwrap_or(0);
             let mut y = prepaint.last_layout.visible_top
                 + prepaint.last_layout.lines[..line_index]
                     .iter()
                     .map(|line| line.size(prepaint.last_layout.line_height).height)
                     .fold(px(0.), |height, line_height| height + line_height);
+            y += prepaint.last_layout.line_height * wrapped_row;
             if let Some(current_row) = prepaint.current_row {
                 if let Ok(current_index) = prepaint
                     .last_layout
