@@ -4,11 +4,12 @@
 //! https://github.com/zed-industries/zed/blob/main/crates/gpui/examples/input.rs
 use gpui::TextAlign;
 use gpui::{
-    Action, App, AppContext, Bounds, ClipboardItem, Context, Edges, Entity, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyBinding,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
-    Render, ScrollHandle, ScrollWheelEvent, SharedString, Styled as _, Subscription,
-    UTF16Selection, Window, actions, div, point, prelude::FluentBuilder as _, px,
+    AccessibleAction, Action, AnyElement, App, AppContext, Bounds, ClipboardItem, Context, Edges,
+    ElementId, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, KeyBinding, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, ParentElement as _, Pixels, Point, Render, ScrollHandle, ScrollWheelEvent,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, UTF16Selection,
+    Window, actions, div, point, prelude::FluentBuilder as _, px,
 };
 use ropey::{Rope, RopeSlice};
 use serde::Deserialize;
@@ -115,6 +116,12 @@ actions!(
         Search,
         Replace,
         GoToDefinition,
+        GutterPrev,
+        GutterNext,
+        GutterFirst,
+        GutterLast,
+        GutterActivate,
+        GutterExit,
     ]
 );
 
@@ -140,6 +147,10 @@ pub enum InputEvent {
 }
 
 pub(super) const CONTEXT: &str = "Input";
+
+/// Key context of a focused gutter lane. Deeper than [`CONTEXT`], so its arrow,
+/// home/end, enter and escape bindings shadow the editor's while a lane is focused.
+pub(super) const GUTTER_CONTEXT: &str = "GutterLane";
 
 pub(crate) fn init(cx: &mut App) {
     cx.bind_keys([
@@ -313,6 +324,13 @@ pub(crate) fn init(cx: &mut App) {
         KeyBinding::new("cmd-shift-f", Replace, Some(CONTEXT)),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-h", Replace, Some(CONTEXT)),
+        KeyBinding::new("up", GutterPrev, Some(GUTTER_CONTEXT)),
+        KeyBinding::new("down", GutterNext, Some(GUTTER_CONTEXT)),
+        KeyBinding::new("home", GutterFirst, Some(GUTTER_CONTEXT)),
+        KeyBinding::new("end", GutterLast, Some(GUTTER_CONTEXT)),
+        KeyBinding::new("enter", GutterActivate, Some(GUTTER_CONTEXT)),
+        KeyBinding::new("space", GutterActivate, Some(GUTTER_CONTEXT)),
+        KeyBinding::new("escape", GutterExit, Some(GUTTER_CONTEXT)),
     ]);
 }
 
@@ -4136,6 +4154,221 @@ impl<M: InputModeKind> Focusable for InputBaseState<M> {
     }
 }
 
+impl<M: InputModeKind> InputBaseState<M> {
+    /// Build the gutter lane overlay.
+    ///
+    /// Gutter markers must live in the element tree, not a `prepaint_as_root`
+    /// subtree, to receive key events and expose accessibility nodes. This
+    /// absolutely positioned child of the editor root mirrors the geometry the
+    /// text element computed during prepaint, so hit testing, focus and
+    /// accessibility all agree.
+    fn render_gutter_lane_overlay(&self, entity: &Entity<Self>) -> Option<AnyElement> {
+        let layout = self.last_layout.as_ref()?;
+        let views = self.extras.gutter_lane_views();
+        if views.is_empty() {
+            return None;
+        }
+        let line_height = layout.line_height;
+        let mut line_tops = Vec::with_capacity(layout.lines.len());
+        let mut y = layout.visible_top;
+        for line in layout.lines.iter() {
+            line_tops.push(y);
+            y += line.size(line_height).height;
+        }
+        let total_lanes = views
+            .iter()
+            .map(|view| view.width())
+            .fold(px(0.), |total, width| total + width);
+        let lane_start = layout.line_number_width - total_lanes;
+
+        let mut overlay = div()
+            .absolute()
+            .left(self.editor_paddings.left)
+            .top(self.editor_paddings.top)
+            .size_full();
+
+        let mut lane_x = lane_start;
+        for (lane_ix, view) in views.into_iter().enumerate() {
+            let lane = view.lane().clone();
+            let renderer = view.renderer().clone();
+            let focus = view.focus_handle().clone();
+            let label = view.label().cloned();
+            let active_row = view.active_row();
+            let width = view.width();
+            let rows = Rc::new({
+                let mut rows: Vec<(usize, usize, bool)> = view
+                    .markers()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, marker)| (marker.row(), index, marker.is_enabled()))
+                    .collect();
+                rows.sort_unstable_by_key(|&(row, _, _)| row);
+                rows
+            });
+
+            let key_lane = lane.clone();
+            let key_rows = rows.clone();
+            let key_state = entity.clone();
+
+            #[derive(Clone, Copy)]
+            enum Nav {
+                Prev,
+                Next,
+                First,
+                Last,
+            }
+            let move_to = |mode: Nav| {
+                let lane = key_lane.clone();
+                let rows = key_rows.clone();
+                let state = key_state.clone();
+                move |_: &mut Window, cx: &mut App| {
+                    if rows.is_empty() {
+                        return;
+                    }
+                    let current = lane.active_row(cx).unwrap_or(rows[0].0);
+                    let position = rows
+                        .iter()
+                        .position(|(row, _, _)| *row == current)
+                        .unwrap_or(0);
+                    let next = match mode {
+                        Nav::Prev => position.saturating_sub(1),
+                        Nav::Next => (position + 1).min(rows.len() - 1),
+                        Nav::First => 0,
+                        Nav::Last => rows.len() - 1,
+                    };
+                    let (row, _, _) = rows[next];
+                    lane.set_active_row(Some(row), cx);
+                    state.update(cx, |_, cx| cx.notify());
+                }
+            };
+            let activate = {
+                let lane = key_lane.clone();
+                let rows = key_rows.clone();
+                let state = key_state.clone();
+                move |_: &mut Window, cx: &mut App| {
+                    let current = lane.active_row(cx);
+                    let entry = current
+                        .and_then(|row| rows.iter().find(|(r, _, _)| *r == row))
+                        .or_else(|| rows.first());
+                    if let Some(&(row, index, enabled)) = entry
+                        && enabled
+                    {
+                        state.update(cx, |_, cx| {
+                            cx.emit(InputEvent::GutterMarkerActivated {
+                                lane: lane.clone(),
+                                index,
+                                logical_row: row,
+                            });
+                        });
+                    }
+                }
+            };
+            let exit = {
+                let state = key_state.clone();
+                move |window: &mut Window, cx: &mut App| {
+                    state.update(cx, |state, cx| state.focus(window, cx));
+                }
+            };
+
+            let mut lane_wrapper = div()
+                .id(ElementId::Name(format!("gutter-lane-{lane_ix}").into()))
+                .absolute()
+                .left(lane_x)
+                .top(px(0.))
+                .w(width)
+                .h_full()
+                .track_focus(&focus)
+                .key_context(GUTTER_CONTEXT)
+                .role(gpui::Role::List)
+                .when_some(label.clone(), |this, label| this.aria_label(label))
+                .on_action({
+                    let action = move_to(Nav::Prev);
+                    move |_: &GutterPrev, window, cx| action(window, cx)
+                })
+                .on_action({
+                    let action = move_to(Nav::Next);
+                    move |_: &GutterNext, window, cx| action(window, cx)
+                })
+                .on_action({
+                    let action = move_to(Nav::First);
+                    move |_: &GutterFirst, window, cx| action(window, cx)
+                })
+                .on_action({
+                    let action = move_to(Nav::Last);
+                    move |_: &GutterLast, window, cx| action(window, cx)
+                })
+                .on_action(move |_: &GutterActivate, window, cx| activate(window, cx))
+                .on_action(move |_: &GutterExit, window, cx| exit(window, cx));
+
+            for (marker_ix, marker) in view.markers().iter().enumerate() {
+                let Ok(line_ix) = layout.visible_buffer_lines.binary_search(&marker.row()) else {
+                    continue;
+                };
+                let enabled = marker.is_enabled();
+                let logical_row = marker.row();
+                let aria_label = marker
+                    .tooltip()
+                    .cloned()
+                    .or_else(|| label.clone())
+                    .unwrap_or_else(|| marker.icon().clone());
+                let is_active = active_row == Some(logical_row);
+                let child = renderer(marker);
+
+                let mouse_lane = lane.clone();
+                let mouse_state = entity.clone();
+                let a11y_lane = lane.clone();
+                let a11y_state = entity.clone();
+
+                lane_wrapper = lane_wrapper.child(
+                    div()
+                        .id(ElementId::Name(
+                            format!("gutter-marker-{lane_ix}-{marker_ix}").into(),
+                        ))
+                        .absolute()
+                        .left(px(0.))
+                        .top(line_tops[line_ix])
+                        .w(width)
+                        .h(line_height)
+                        .role(gpui::Role::Button)
+                        .aria_label(aria_label)
+                        .aria_selected(is_active)
+                        .child(child)
+                        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                            cx.stop_propagation();
+                            if enabled {
+                                let lane = mouse_lane.clone();
+                                mouse_state.update(cx, |_, cx| {
+                                    cx.emit(InputEvent::GutterMarkerMouseDown {
+                                        lane,
+                                        index: marker_ix,
+                                        logical_row,
+                                    });
+                                });
+                            }
+                        })
+                        .on_a11y_action(AccessibleAction::Click, move |_, _, cx| {
+                            if enabled {
+                                let lane = a11y_lane.clone();
+                                a11y_state.update(cx, |_, cx| {
+                                    cx.emit(InputEvent::GutterMarkerActivated {
+                                        lane,
+                                        index: marker_ix,
+                                        logical_row,
+                                    });
+                                });
+                            }
+                        }),
+                );
+            }
+            overlay = overlay.child(lane_wrapper);
+
+            lane_x += view.width();
+        }
+
+        Some(overlay.into_any_element())
+    }
+}
+
 impl<M: InputModeKind> Render for InputBaseState<M> {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Before anything reads it: the element resolves this style during
@@ -4144,6 +4377,7 @@ impl<M: InputModeKind> Render for InputBaseState<M> {
             .projected_editor_style
             .resolved(&crate::Theme::global(cx).tokens);
         let entity = cx.entity();
+        let gutter_overlay = self.render_gutter_lane_overlay(&entity);
         if self._pending_update {
             self.mode.update_highlighter::<M>(
                 super::mode::HighlighterUpdate {
@@ -4258,6 +4492,7 @@ impl<M: InputModeKind> Render for InputBaseState<M> {
                     .pl(self.editor_paddings.left)
             })
             .child(TextElement::new(entity.clone()).placeholder(self.placeholder.clone()))
+            .children(gutter_overlay)
             .when(self.shows_scrollbar(), |this| {
                 this.child(EditorScrollbar::new(entity.clone()))
             });

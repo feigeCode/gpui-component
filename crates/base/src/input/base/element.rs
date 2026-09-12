@@ -8,8 +8,8 @@ use gpui::{
 use gpui::{
     HighlightStyle, Hitbox, HitboxBehavior, Hsla, InteractiveElement, IntoElement, LayoutId,
     MouseButton, MouseMoveEvent, MouseUpEvent, ParentElement as _, Path, Pixels, Point, Position,
-    ShapedLine, SharedString, Size, StatefulInteractiveElement as _, Style, Styled as _, TextAlign,
-    TextRun, TextStyle, UnderlineStyle, Window, fill, point, px, relative, size,
+    ShapedLine, SharedString, Size, Style, Styled as _, TextAlign, TextRun, TextStyle,
+    UnderlineStyle, Window, fill, point, px, relative, size,
 };
 use ropey::Rope;
 use smallvec::SmallVec;
@@ -21,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    InputBaseState, InputEvent, RangeDecorationStyle, TextDecoration,
+    InputBaseState, RangeDecorationStyle, TextDecoration,
     layout::{LastLayout, WhitespaceIndicators},
     mode::LayoutMode,
 };
@@ -395,11 +395,6 @@ struct FoldIconLayout {
     line_number_hitbox: Hitbox,
     /// List of (display_row, is_folded, icon_element) pairs for each fold candidate
     icons: Vec<(usize, bool, gpui::AnyElement)>,
-}
-
-/// Prepainted gutter lane markers, one element per visible marker.
-struct GutterLaneLayout {
-    icons: Vec<AnyElement>,
 }
 
 pub(super) struct TextElement<M: InputModeKind> {
@@ -1335,56 +1330,39 @@ impl<M: InputModeKind> TextElement<M> {
         }
     }
 
-    /// Layout and prepaint visible gutter lane markers.
+    /// Compute and store the window-space bounds of visible gutter lane markers.
     ///
     /// Lanes stack left-to-right at the right edge of the gutter, in creation
-    /// order. Markers on folded or offscreen rows are not laid out. Each marker
-    /// carries a role/label for accessibility and a mouse handler that forwards
-    /// a click as an [`InputEvent::GutterMarkerMouseDown`].
-    ///
-    /// Keyboard navigation is not wired yet: a `prepaint_as_root` subtree gets a
-    /// hitbox but sits outside the key-dispatch tree, so it cannot receive keys.
-    /// Making the lane keyboard- and screen-reader-navigable needs it rendered as
-    /// a real overlay child in `InputBaseState::render`.
-    fn layout_gutter_lanes(
+    /// order. Markers on folded or offscreen rows are skipped. The interactive
+    /// overlay in `InputBaseState::render` builds its marker elements from this
+    /// same geometry, so hit testing, focus and accessibility all agree.
+    fn layout_gutter_lane_bounds(
         &self,
         origin_x: Pixels,
         bounds: &Bounds<Pixels>,
         last_layout: &LastLayout,
-        window: &mut Window,
         cx: &mut App,
-    ) -> GutterLaneLayout {
-        let (views, line_tops) = {
-            let state = self.state.read(cx);
-            let views = state.extras.gutter_lane_views();
-            let mut tops = Vec::with_capacity(last_layout.lines.len());
-            let mut y = last_layout.visible_top;
-            for line in last_layout.lines.iter() {
-                tops.push(y);
-                y += line.size(last_layout.line_height).height;
-            }
-            (views, tops)
-        };
+    ) {
+        let views = self.state.read(cx).extras.gutter_lane_views();
         if views.is_empty() {
-            return GutterLaneLayout { icons: Vec::new() };
+            return;
         }
-
         let line_height = last_layout.line_height;
+        let mut line_tops = Vec::with_capacity(last_layout.lines.len());
+        let mut y = last_layout.visible_top;
+        for line in last_layout.lines.iter() {
+            line_tops.push(y);
+            y += line.size(line_height).height;
+        }
         let total_lanes = views
             .iter()
             .map(|view| view.width())
             .fold(px(0.), |total, width| total + width);
         let mut lane_x = origin_x + last_layout.line_number_width - total_lanes;
 
-        let mut icons = Vec::new();
-        for (lane_ix, view) in views.into_iter().enumerate() {
-            let lane = view.lane().clone();
-            let renderer = view.renderer().clone();
-            let lane_label = view.label().cloned();
-            let active_row = view.active_row();
+        for view in views {
             let bounds_store = view.bounds_store();
             bounds_store.borrow_mut().clear();
-
             for (marker_ix, marker) in view.markers().iter().enumerate() {
                 let Ok(line_ix) = last_layout
                     .visible_buffer_lines
@@ -1392,60 +1370,15 @@ impl<M: InputModeKind> TextElement<M> {
                 else {
                     continue;
                 };
-                let marker_bounds = Bounds::new(
-                    point(lane_x, bounds.origin.y + line_tops[line_ix]),
-                    size(view.width(), line_height),
+                bounds_store.borrow_mut().insert(
+                    marker_ix,
+                    Bounds::new(
+                        point(lane_x, bounds.origin.y + line_tops[line_ix]),
+                        size(view.width(), line_height),
+                    ),
                 );
-                bounds_store.borrow_mut().insert(marker_ix, marker_bounds);
-
-                let enabled = marker.is_enabled();
-                let logical_row = marker.row();
-                let aria_label = marker
-                    .tooltip()
-                    .cloned()
-                    .or_else(|| lane_label.clone())
-                    .unwrap_or_else(|| marker.icon().clone());
-                let is_active = active_row == Some(logical_row);
-                let state = self.state.clone();
-                let mouse_lane = lane.clone();
-                let child = renderer(marker);
-                let mut icon = gpui::div()
-                    .id(ElementId::Name(
-                        format!("gutter-marker-{lane_ix}-{marker_ix}").into(),
-                    ))
-                    .size_full()
-                    .child(child)
-                    .role(gpui::Role::Button)
-                    .aria_label(aria_label)
-                    .aria_selected(is_active)
-                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                        cx.stop_propagation();
-                        if enabled {
-                            let lane = mouse_lane.clone();
-                            state.update(cx, |_, cx| {
-                                cx.emit(InputEvent::GutterMarkerMouseDown {
-                                    lane,
-                                    index: marker_ix,
-                                    logical_row,
-                                });
-                            });
-                        }
-                    })
-                    .into_any_element();
-
-                icon.prepaint_as_root(marker_bounds.origin, marker_bounds.size.into(), window, cx);
-                icons.push(icon);
             }
-
             lane_x += view.width();
-        }
-
-        GutterLaneLayout { icons }
-    }
-
-    fn paint_gutter_lanes(layout: &mut GutterLaneLayout, window: &mut Window, cx: &mut App) {
-        for icon in &mut layout.icons {
-            icon.paint(window, cx);
         }
     }
 
@@ -1826,8 +1759,6 @@ pub(super) struct PrepaintState {
     bounds: Bounds<Pixels>,
     /// Fold icon layout data
     fold_icon_layout: FoldIconLayout,
-    /// Prepainted gutter lane markers
-    gutter_lane_layout: GutterLaneLayout,
     // Inline completion rendering data
     /// Shaped ghost lines to paint after cursor row (completion lines 2+)
     ghost_lines: Vec<ShapedLine>,
@@ -2357,8 +2288,7 @@ impl<M: InputModeKind> Element for TextElement<M> {
             )));
         let fold_icon_layout =
             self.layout_fold_icons(original_x, &bounds, &last_layout, window, cx);
-        let gutter_lane_layout =
-            self.layout_gutter_lanes(original_x, &bounds, &last_layout, window, cx);
+        self.layout_gutter_lane_bounds(original_x, &bounds, &last_layout, cx);
 
         PrepaintState {
             bounds,
@@ -2377,7 +2307,6 @@ impl<M: InputModeKind> Element for TextElement<M> {
             range_decoration_frames,
             indent_guides_path,
             fold_icon_layout,
-            gutter_lane_layout,
             ghost_first_line,
             ghost_lines,
             ghost_lines_height,
@@ -2680,7 +2609,6 @@ impl<M: InputModeKind> Element for TextElement<M> {
             window,
             cx,
         );
-        Self::paint_gutter_lanes(&mut prepaint.gutter_lane_layout, window, cx);
 
         self.state.update(cx, |state, cx| {
             let geometry_changed = state.last_bounds != Some(bounds)
@@ -3933,5 +3861,53 @@ mod tests {
 
         cx.simulate_mouse_down(bounds0.center(), MouseButton::Left, Modifiers::default());
         assert_eq!(events.borrow().as_slice(), &[(0, 0)]);
+    }
+
+    #[gpui::test]
+    fn gutter_lane_keyboard_navigates_and_activates(cx: &mut TestAppContext) {
+        use crate::input::{GutterLaneOptions, GutterMarker, InputEvent};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let text = "alpha\nbeta\ngamma\ndelta\n";
+        let (editor, window) = decoration_editor(cx, text, false);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+        let activated: Rc<RefCell<Vec<(usize, usize)>>> = Rc::new(RefCell::new(Vec::new()));
+        let activated_for_sub = activated.clone();
+        let _sub = cx.update(|_, cx| {
+            cx.subscribe(&editor, move |_, event: &InputEvent, _| {
+                if let InputEvent::GutterMarkerActivated {
+                    index, logical_row, ..
+                } = event
+                {
+                    activated_for_sub.borrow_mut().push((*index, *logical_row));
+                }
+            })
+        });
+
+        let lane = cx.update(|_window, cx| {
+            editor.update(cx, |state, cx| {
+                state.create_gutter_lane(
+                    vec![GutterMarker::new(0, "dot"), GutterMarker::new(2, "dot")],
+                    GutterLaneOptions::new(|_| div().size_full().into_any_element()),
+                    cx,
+                )
+            })
+        });
+
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.update(|window, cx| lane.focus(window, cx));
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(cx.update(|window, cx| {
+            lane.focus_handle(cx)
+                .expect("lane has a focus handle")
+                .is_focused(window)
+        }));
+
+        cx.simulate_keystrokes("down enter");
+        assert_eq!(cx.update(|_, cx| lane.active_row(cx)), Some(2));
+        assert_eq!(activated.borrow().as_slice(), &[(1, 2)]);
     }
 }
