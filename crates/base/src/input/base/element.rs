@@ -1508,6 +1508,9 @@ impl<M: InputModeKind> TextElement<M> {
         }
 
         let mut lines = Vec::with_capacity(last_layout.visible_buffer_lines.len());
+        // Inline widgets to reserve space for. Only used when the owning line has a
+        // single visual row; soft-wrap aware widget layout is out of scope.
+        let inline_widgets = state.extras.inline_widgets();
         // run_offset tracks position in the runs vec coordinate space (only visible line bytes).
         // This is separate from the visible_text offset because runs from highlight_lines
         // only cover visible (non-folded) lines.
@@ -1564,7 +1567,14 @@ impl<M: InputModeKind> TextElement<M> {
                 .lines(wrapped_lines)
                 .wrap_indent(wrap_indent)
                 .with_background(line_has_background)
-                .with_whitespaces(whitespace_indicators.clone());
+                .with_whitespaces(whitespace_indicators.clone())
+                .with_inline_widgets(Self::widget_spans_for_line(
+                    &inline_widgets,
+                    last_layout.visible_line_byte_offsets[vi],
+                    line_text.len(),
+                    font_size,
+                    window,
+                ));
             lines.push(line_layout);
 
             // +1 for the `\n`
@@ -1572,6 +1582,43 @@ impl<M: InputModeKind> TextElement<M> {
         }
 
         lines
+    }
+
+    /// Inline-widget `(local offset, reserved width)` spans for one logical line.
+    fn widget_spans_for_line(
+        widgets: &[crate::input::InlineWidget],
+        line_offset: usize,
+        line_len: usize,
+        font_size: Pixels,
+        window: &mut Window,
+    ) -> Vec<(usize, Pixels)> {
+        if widgets.is_empty() {
+            return Vec::new();
+        }
+        let end = line_offset + line_len;
+        widgets
+            .iter()
+            .filter_map(|widget| {
+                let offset = widget.offset();
+                if offset < line_offset || offset > end {
+                    return None;
+                }
+                let text = widget.text().clone();
+                let run = TextRun {
+                    len: text.len(),
+                    font: window.text_style().font(),
+                    color: gpui::black(),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                let width = window
+                    .text_system()
+                    .shape_line(text, font_size, &[run], None)
+                    .width;
+                Some((offset - line_offset, width))
+            })
+            .collect()
     }
 
     /// First usize is the offset of skipped.
@@ -3909,5 +3956,53 @@ mod tests {
         cx.simulate_keystrokes("down enter");
         assert_eq!(cx.update(|_, cx| lane.active_row(cx)), Some(2));
         assert_eq!(activated.borrow().as_slice(), &[(1, 2)]);
+    }
+
+    #[gpui::test]
+    fn inline_widget_reserves_horizontal_space(cx: &mut TestAppContext) {
+        use crate::input::InlineWidget;
+
+        let text = "abcdef";
+        let (editor, window) = decoration_editor(cx, text, false);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+        // Baseline positions with no widget.
+        let (base_anchor_x, base_after_x) = cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let state = editor.read(cx);
+            let layout = state.last_layout.as_ref().unwrap();
+            let line = &layout.lines[0];
+            (
+                line.position_for_index(3, layout, false).unwrap().x,
+                line.position_for_index(4, layout, false).unwrap().x,
+            )
+        });
+
+        cx.update(|window, cx| {
+            editor.update(cx, |state, cx| {
+                state.create_inline_widgets_collection(vec![InlineWidget::new(3, "WWW")], cx)
+            });
+            window.draw(cx).clear(cx);
+        });
+
+        let (anchor_x, after_x) = cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let state = editor.read(cx);
+            let layout = state.last_layout.as_ref().unwrap();
+            let line = &layout.lines[0];
+            (
+                line.position_for_index(3, layout, false).unwrap().x,
+                line.position_for_index(4, layout, false).unwrap().x,
+            )
+        });
+
+        assert_eq!(
+            anchor_x, base_anchor_x,
+            "a widget must not shift its own anchor"
+        );
+        assert!(
+            after_x > base_after_x,
+            "text after a widget must be pushed right"
+        );
     }
 }

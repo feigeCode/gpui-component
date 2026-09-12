@@ -305,9 +305,10 @@ hints.clear(cx);
 hints.dispose(cx);
 ```
 
-Widgets are painted over the text at their anchor. Space-reserving layout, pointer
-hit testing and focus are a follow-up: they require a segmented line model that
-reserves width and reflows the surrounding glyphs.
+Widgets reserve their width on a single-visual-row line and push the glyphs after
+them to the right; the surrounding text is painted in segments so the shift is
+real. Hit testing and focus for interactive widgets, and re-wrapping around a
+widget on a soft-wrapped line, are a follow-up.
 
 ## Value and events
 

@@ -531,6 +531,10 @@ pub(crate) struct LineLayout {
     /// Whether any run of this line carries a background color, so [`Self::paint_background`]
     /// can skip the glyph walk for the common case of a line without highlights.
     has_background: bool,
+    /// Inline widgets anchored inside the first visual row: `(local byte offset,
+    /// reserved width)`, sorted by offset. Only populated when the line occupies a
+    /// single visual row; a soft-wrapped line with widgets keeps its old layout.
+    inline_widgets: Vec<(usize, Pixels)>,
 }
 
 impl LineLayout {
@@ -543,6 +547,7 @@ impl LineLayout {
             whitespace_chars: Vec::new(),
             whitespace_indicators: None,
             has_background: false,
+            inline_widgets: Vec::new(),
         }
     }
 
@@ -613,6 +618,60 @@ impl LineLayout {
         self
     }
 
+    /// Reserve horizontal space for inline widgets anchored on this line.
+    ///
+    /// Widgets are only honored when the line occupies a single visual row: a
+    /// soft-wrapped line would need a wrap pass aware of widget widths, which is
+    /// deliberately out of scope. Offsets are local to the line.
+    pub(crate) fn with_inline_widgets(mut self, mut widgets: Vec<(usize, Pixels)>) -> Self {
+        if self.wrapped_lines.len() <= 1 && !widgets.is_empty() {
+            widgets.retain(|(offset, width)| *width > px(0.) && *offset <= self.len);
+            widgets.sort_unstable_by_key(|(offset, _)| *offset);
+            self.longest_width += widgets
+                .iter()
+                .map(|(_, width)| *width)
+                .fold(px(0.), |total, width| total + width);
+            self.inline_widgets = widgets;
+        }
+        self
+    }
+
+    fn inline_widget_width(&self) -> Pixels {
+        self.inline_widgets
+            .iter()
+            .map(|(_, width)| *width)
+            .fold(px(0.), |total, width| total + width)
+    }
+
+    /// Total reserved widget width strictly before `index`.
+    fn widget_shift_before(&self, index: usize) -> Pixels {
+        self.inline_widgets
+            .iter()
+            .filter(|(offset, _)| *offset < index)
+            .map(|(_, width)| *width)
+            .fold(px(0.), |total, width| total + width)
+    }
+
+    /// For an x in this line's text coordinate space, return the widget whose box
+    /// contains it (if any) together with the width of the widgets before it.
+    fn widget_at_x(&self, x: Pixels) -> (Option<usize>, Pixels) {
+        let Some(line) = self.wrapped_lines.first() else {
+            return (None, px(0.));
+        };
+        let mut prefix = px(0.);
+        for (offset, width) in &self.inline_widgets {
+            let start = line.x_for_index(*offset) + prefix;
+            if x < start {
+                return (None, prefix);
+            }
+            if x < start + *width {
+                return (Some(*offset), prefix);
+            }
+            prefix += *width;
+        }
+        (None, prefix)
+    }
+
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.len
@@ -652,7 +711,8 @@ impl LineLayout {
             if matches {
                 let x = line.x_for_index(offset.saturating_sub(acc_len))
                     + x_offset
-                    + self.line_indent(i);
+                    + self.line_indent(i)
+                    + self.widget_shift_before(offset);
                 return Some(point(x, offset_y));
             }
 
@@ -677,7 +737,20 @@ impl LineLayout {
 
         for (i, line) in self.wrapped_lines.iter().enumerate() {
             let line_indent = self.line_indent(i);
-            if x <= line_indent + line.width {
+            let row_width = line.width
+                + if i == 0 {
+                    self.inline_widget_width()
+                } else {
+                    px(0.)
+                };
+            if x <= line_indent + row_width {
+                if i == 0 && !self.inline_widgets.is_empty() {
+                    let (hit, prefix) = self.widget_at_x(x - line_indent);
+                    if let Some(offset) = hit {
+                        return acc_len + offset;
+                    }
+                    return acc_len + line.closest_index_for_x(x - line_indent - prefix);
+                }
                 return acc_len + line.closest_index_for_x(x - line_indent);
             }
             acc_len += line.len;
@@ -729,10 +802,23 @@ impl LineLayout {
     ) -> Option<(usize, bool)> {
         let (i, offset, x) = self.wrapped_line_at(pos, last_layout)?;
         let line = &self.wrapped_lines[i];
-        let ix = line.closest_index_for_x(x);
+        let ix = self.closest_index_for_row(i, x)?;
         let line_end_affinity = i + 1 < self.wrapped_lines.len() && ix == line.len;
 
         Some((offset + ix, line_end_affinity))
+    }
+
+    /// Nearest index for an x already in `row`'s text coordinate space.
+    fn closest_index_for_row(&self, row: usize, x: Pixels) -> Option<usize> {
+        let line = self.wrapped_lines.get(row)?;
+        if row == 0 && !self.inline_widgets.is_empty() {
+            let (hit, prefix) = self.widget_at_x(x);
+            if let Some(offset) = hit {
+                return Some(offset);
+            }
+            return Some(line.closest_index_for_x(x - prefix));
+        }
+        Some(line.closest_index_for_x(x))
     }
 
     /// How many columns the given position sits past the end of the line under it.
@@ -758,7 +844,13 @@ impl LineLayout {
             return 0;
         }
 
-        let past_end = x - self.wrapped_lines[i].width;
+        let past_end = x
+            - self.wrapped_lines[i].width
+            - if i == 0 {
+                self.inline_widget_width()
+            } else {
+                px(0.)
+            };
         if past_end <= px(0.) {
             return 0;
         }
@@ -773,15 +865,25 @@ impl LineLayout {
     ) -> Option<usize> {
         let (i, offset, x) = self.wrapped_line_at(pos, last_layout)?;
 
+        if i == 0 && !self.inline_widgets.is_empty() {
+            let (hit, prefix) = self.widget_at_x(x);
+            if let Some(widget_offset) = hit {
+                return Some(offset + widget_offset);
+            }
+            return Some(offset + self.wrapped_lines[i].index_for_x(x - prefix)?);
+        }
         Some(offset + self.wrapped_lines[i].index_for_x(x)?)
     }
 
     pub(crate) fn size(&self, line_height: Pixels) -> Size<Pixels> {
+        let widget_width = self.inline_widget_width();
         let width = self
             .wrapped_lines
             .iter()
             .enumerate()
-            .map(|(ix, line)| line.width + self.line_indent(ix))
+            .map(|(ix, line)| {
+                line.width + self.line_indent(ix) + if ix == 0 { widget_width } else { px(0.) }
+            })
             .max()
             .unwrap_or(self.longest_width);
         size(width, self.wrapped_lines.len() * line_height)
@@ -791,6 +893,47 @@ impl LineLayout {
     ///
     /// gpui's [`ShapedLine::paint`] does not draw backgrounds, so every line painted with
     /// [`Self::paint`] needs this called first, with the same origin and align width.
+    /// Split the first visual row's shaped text around inline widgets.
+    ///
+    /// Returns `(x offset within the row, shaped segment)` pairs in paint order.
+    /// Only meaningful when [`Self::inline_widgets`] is populated (single-row line).
+    fn first_row_segments(
+        &self,
+        text_align: TextAlign,
+        align_width: Option<Pixels>,
+    ) -> Vec<(Pixels, ShapedLine)> {
+        let Some(line) = self.wrapped_lines.first() else {
+            return Vec::new();
+        };
+        let total = line.width + self.inline_widget_width();
+        let available = align_width.unwrap_or(total);
+        let base = match text_align {
+            TextAlign::Left => px(0.),
+            TextAlign::Center => (available - total).max(px(0.)).half(),
+            TextAlign::Right => (available - total).max(px(0.)),
+        };
+
+        let mut segments = Vec::new();
+        let mut remaining = line.clone();
+        let mut x = base;
+        let mut painted = 0usize;
+        for (offset, width) in &self.inline_widgets {
+            let split = offset.saturating_sub(painted).min(remaining.len());
+            let (left, right) = remaining.split_at(split);
+            let left_width = left.width;
+            if left.len() > 0 {
+                segments.push((x, left));
+            }
+            x += left_width + *width;
+            painted = *offset;
+            remaining = right;
+        }
+        if remaining.len() > 0 {
+            segments.push((x, remaining));
+        }
+        segments
+    }
+
     pub(crate) fn paint_background(
         &self,
         pos: Point<Pixels>,
@@ -803,6 +946,20 @@ impl LineLayout {
         // Painting a background walks every glyph and pushes a scene layer, so skip the
         // whole pass for lines that have no background color to paint.
         if !self.has_background {
+            return;
+        }
+
+        if !self.inline_widgets.is_empty() && self.wrapped_lines.len() == 1 {
+            for (x, segment) in self.first_row_segments(text_align, align_width) {
+                _ = segment.paint_background(
+                    pos + point(x + self.line_indent(0), px(0.)),
+                    line_height,
+                    TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
+            }
             return;
         }
 
@@ -827,15 +984,28 @@ impl LineLayout {
         window: &mut Window,
         cx: &mut App,
     ) {
-        for (ix, line) in self.wrapped_lines.iter().enumerate() {
-            _ = line.paint(
-                pos + point(self.line_indent(ix), ix * line_height),
-                line_height,
-                text_align,
-                align_width,
-                window,
-                cx,
-            );
+        if !self.inline_widgets.is_empty() && self.wrapped_lines.len() == 1 {
+            for (x, segment) in self.first_row_segments(text_align, align_width) {
+                _ = segment.paint(
+                    pos + point(x + self.line_indent(0), px(0.)),
+                    line_height,
+                    TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
+            }
+        } else {
+            for (ix, line) in self.wrapped_lines.iter().enumerate() {
+                _ = line.paint(
+                    pos + point(self.line_indent(ix), ix * line_height),
+                    line_height,
+                    text_align,
+                    align_width,
+                    window,
+                    cx,
+                );
+            }
         }
 
         // Paint whitespace indicators
