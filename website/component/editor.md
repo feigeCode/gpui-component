@@ -252,6 +252,63 @@ do not scan every decoration per frame. Setting/appending entries rebuilds that
 collection's index; edits update affected collections linearly without re-sorting.
 The Editor showcase's **Decorations** tab demonstrates both collection types.
 
+### Gutter lanes
+
+`create_gutter_lane` adds a column of markers that the application renders itself.
+Each lane is an independent `GutterLane` handle; lanes stack left-to-right after the
+line-number column and reserve their width once used, so the text column does not
+jitter as markers appear and disappear.
+
+```rust
+use gpui_kit::component::input::{GutterLaneOptions, GutterMarker};
+
+let lane = editor.update(cx, |state, cx| {
+    state.create_gutter_lane(
+        vec![GutterMarker::new(0, "dot").with_tooltip("Run statement")],
+        GutterLaneOptions::new(|marker| div().child(marker.icon().clone()).into_any_element())
+            .label("Statements"),
+        cx,
+    )
+});
+
+lane.set(vec![GutterMarker::new(0, "running")], cx);
+lane.append(vec![GutterMarker::new(4, "idle")], cx);
+let rows = lane.get_markers(cx);
+lane.clear(cx);
+lane.dispose(cx);
+```
+
+Marker rows are logical buffer rows and do not move with edits, so re-project them
+from your own semantic source after a change. Clicking a marker emits
+`InputEvent::GutterMarkerMouseDown { lane, index, logical_row }`. A focused lane
+supports Up/Down/Home/End to move and Enter/Space to activate, delivered as
+`InputEvent::GutterMarkerActivated` and through the accessibility
+`AccessibleAction::Click`; each marker exposes a `Button` role with its tooltip as
+label.
+
+### Inline widgets
+
+`create_inline_widgets_collection` anchors non-document text to a UTF-8 byte offset.
+Offsets follow edits the same way a collapsed anchor does, and widgets never enter
+the document, selection, undo or text layout.
+
+```rust
+use gpui_kit::component::input::InlineWidget;
+
+let hints = editor.update(cx, |state, cx| {
+    state.create_inline_widgets_collection(vec![InlineWidget::new(7, "value")], cx)
+});
+
+hints.set(vec![InlineWidget::new(7, "value")], cx);
+let offsets = hints.get_offsets(cx);
+hints.clear(cx);
+hints.dispose(cx);
+```
+
+Widgets are painted over the text at their anchor. Space-reserving layout, pointer
+hit testing and focus are a follow-up: they require a segmented line model that
+reserves width and reflows the surrounding glyphs.
+
 ## Value and events
 
 ```rust

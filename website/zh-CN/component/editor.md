@@ -210,6 +210,58 @@ review_ranges.dispose(cx); // 释放集合，使该句柄及其克隆全部失�
 会重建对应集合的索引；编辑文本时线性更新受影响的集合，不重新排序。
 Editor 展示页的 **Decorations** 标签演示了两种集合的组合使用。
 
+### Gutter lanes（行号槽列）
+
+`create_gutter_lane` 创建一列由应用自行绘制的标记。每列都是独立的 `GutterLane`
+句柄；多列在行号列右侧依次堆叠，一经使用即保留列宽，因此标记出现或消失时文本列
+不会抖动。
+
+```rust
+use gpui_kit::component::input::{GutterLaneOptions, GutterMarker};
+
+let lane = editor.update(cx, |state, cx| {
+    state.create_gutter_lane(
+        vec![GutterMarker::new(0, "dot").with_tooltip("运行语句")],
+        GutterLaneOptions::new(|marker| div().child(marker.icon().clone()).into_any_element())
+            .label("语句"),
+        cx,
+    )
+});
+
+lane.set(vec![GutterMarker::new(0, "running")], cx);
+lane.append(vec![GutterMarker::new(4, "idle")], cx);
+let markers = lane.get_markers(cx);
+lane.clear(cx);
+lane.dispose(cx);
+```
+
+标记的行号是逻辑缓冲区行号，不随编辑移动，因此内容变化后需要由你自己的语义数据重新
+投影。点击标记会发出 `InputEvent::GutterMarkerMouseDown { lane, index, logical_row }`。
+聚焦的 lane 支持 Up/Down/Home/End 移动、Enter/Space 激活，以
+`InputEvent::GutterMarkerActivated` 以及无障碍 `AccessibleAction::Click` 交付；每个标记
+以 `Button` 角色暴露，tooltip 作为 label。
+
+### 行内 widget
+
+`create_inline_widgets_collection` 把非文档文本锚定到 UTF-8 字节偏移。偏移按“折叠锚点”
+的语义跟随编辑；widget 不进入文档、选区、撤销或文本布局。
+
+```rust
+use gpui_kit::component::input::InlineWidget;
+
+let hints = editor.update(cx, |state, cx| {
+    state.create_inline_widgets_collection(vec![InlineWidget::new(7, "value")], cx)
+});
+
+hints.set(vec![InlineWidget::new(7, "value")], cx);
+let offsets = hints.get_offsets(cx);
+hints.clear(cx);
+hints.dispose(cx);
+```
+
+widget 会在其锚点处绘制在文本之上。预留布局空间、鼠标命中与焦点是后续工作：需要引入
+分段行模型来为 widget 预留宽度并重排周围字形。
+
 ## 值与事件
 
 ```rust
