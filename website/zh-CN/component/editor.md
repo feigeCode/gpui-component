@@ -244,7 +244,8 @@ lane.dispose(cx);
 ### 行内 widget
 
 `create_inline_widgets_collection` 把非文档文本锚定到 UTF-8 字节偏移。偏移按“折叠锚点”
-的语义跟随编辑；widget 不进入文档、选区、撤销或文本布局。
+的语义跟随编辑；widget 不进入文档、选区或撤销历史。单可视行会预留横向布局空间；软换行
+行暂时保持旧的文本叠加行为。
 
 ```rust
 use gpui_kit::component::input::InlineWidget;

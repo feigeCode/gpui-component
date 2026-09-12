@@ -636,7 +636,7 @@ impl LineLayout {
         self
     }
 
-    fn inline_widget_width(&self) -> Pixels {
+    pub(crate) fn inline_widget_width(&self) -> Pixels {
         self.inline_widgets
             .iter()
             .map(|(_, width)| *width)
@@ -644,7 +644,7 @@ impl LineLayout {
     }
 
     /// Total reserved widget width strictly before `index`.
-    fn widget_shift_before(&self, index: usize) -> Pixels {
+    pub(crate) fn widget_shift_before(&self, index: usize) -> Pixels {
         self.inline_widgets
             .iter()
             .filter(|(offset, _)| *offset < index)

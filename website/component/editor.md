@@ -289,8 +289,9 @@ label.
 ### Inline widgets
 
 `create_inline_widgets_collection` anchors non-document text to a UTF-8 byte offset.
-Offsets follow edits the same way a collapsed anchor does, and widgets never enter
-the document, selection, undo or text layout.
+Offsets follow edits the same way a collapsed anchor does. Widgets never enter
+the document, selection or undo history. On single-visual-row lines they reserve
+horizontal layout space; soft-wrapped lines keep legacy overlay behavior.
 
 ```rust
 use gpui_kit::component::input::InlineWidget;

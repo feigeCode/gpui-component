@@ -695,13 +695,19 @@ impl<M: InputModeKind> TextElement<M> {
                 let newline = is_last && range.start <= end && range.end > end;
                 if start_ix < end_ix || newline {
                     let indent = if row == 0 { px(0.) } else { line.wrap_indent };
-                    let left = alignment + indent + shaped.x_for_index(start_ix.min(end) - offset);
+                    let left_offset = start_ix.min(end) - offset;
+                    let left = alignment
+                        + indent
+                        + shaped.x_for_index(left_offset)
+                        + line.widget_shift_before(left_offset);
                     let right = alignment
                         + indent
                         + if newline {
-                            shaped.width + last_layout.space_width
+                            shaped.width + line.inline_widget_width() + last_layout.space_width
                         } else {
-                            shaped.x_for_index(end_ix - offset)
+                            let right_offset = end_ix - offset;
+                            shaped.x_for_index(right_offset)
+                                + line.widget_shift_before(right_offset)
                         };
                     corners.push(Corners {
                         top_left: point(left, y),
@@ -1425,11 +1431,24 @@ impl<M: InputModeKind> TextElement<M> {
             ) else {
                 continue;
             };
-            let y = prepaint.last_layout.visible_top
+            let mut y = prepaint.last_layout.visible_top
                 + prepaint.last_layout.lines[..line_index]
                     .iter()
                     .map(|line| line.size(prepaint.last_layout.line_height).height)
                     .fold(px(0.), |height, line_height| height + line_height);
+            if let Some(current_row) = prepaint.current_row {
+                if let Ok(current_index) = prepaint
+                    .last_layout
+                    .visible_buffer_lines
+                    .binary_search(&current_row)
+                    && line_index > current_index
+                {
+                    // Inline completion adds virtual rows immediately after caret row.
+                    // Keep following inline widgets aligned with text painted below them.
+                    // `current_index` is visible-row relative, matching `line_index`.
+                    y += prepaint.ghost_lines_height;
+                }
+            }
             let position = widget_point + gpui::point(prepaint.last_layout.line_number_width, y);
             let text = widget.text().clone();
             let run = TextRun {
@@ -2178,6 +2197,16 @@ impl<M: InputModeKind> Element for TextElement<M> {
                 .width;
         }
         last_layout.lines = Rc::new(lines);
+        if !state.extras.inline_widgets().is_empty() {
+            longest_line_width = longest_line_width.max(
+                last_layout
+                    .lines
+                    .iter()
+                    .map(|line| line.size(line_height).width)
+                    .max()
+                    .unwrap_or(px(0.)),
+            );
+        }
 
         let (ghost_first_line, ghost_lines) = Self::layout_inline_completion(
             state,
@@ -4003,6 +4032,30 @@ mod tests {
         assert!(
             after_x > base_after_x,
             "text after a widget must be pushed right"
+        );
+
+        let (corners, end_x, scroll_width, line_width) = cx.update(|_, cx| {
+            let state = editor.read(cx);
+            let layout = state.last_layout.as_ref().unwrap();
+            let line = &layout.lines[0];
+            let corners = TextElement::<EditorMode>::layout_range_corners(&(0..text.len()), layout)
+                .expect("range should have visible geometry");
+            (
+                corners,
+                line.position_for_index(text.len(), layout, false)
+                    .unwrap()
+                    .x,
+                state.scroll_size.width,
+                line.size(layout.line_height).width,
+            )
+        });
+        assert_eq!(
+            corners[0].top_right.x, end_x,
+            "range geometry must include inline widget width"
+        );
+        assert!(
+            scroll_width >= line_width,
+            "horizontal scroll extent must include inline widget width"
         );
     }
 }

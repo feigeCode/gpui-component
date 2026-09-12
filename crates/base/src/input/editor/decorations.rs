@@ -509,6 +509,7 @@ struct GutterLaneEntry {
     state: WeakEntity<InputBaseState<EditorMode>>,
     options: GutterLaneOptions,
     markers: Vec<GutterMarker>,
+    reserved: bool,
     focus: FocusHandle,
     active_row: Option<usize>,
     bounds: Rc<RefCell<HashMap<usize, Bounds<Pixels>>>>,
@@ -516,7 +517,7 @@ struct GutterLaneEntry {
 
 impl GutterLaneEntry {
     fn visible_width(&self) -> Pixels {
-        if self.options.reserve_when_empty || !self.markers.is_empty() {
+        if self.reserved {
             self.options.width
         } else {
             px(0.)
@@ -540,12 +541,14 @@ impl GutterLanes {
     ) -> DecorationCollectionId {
         let id = DecorationCollectionId(self.next_id);
         self.next_id += 1;
+        let reserved = options.reserve_when_empty || !markers.is_empty();
         self.entries.insert(
             id,
             GutterLaneEntry {
                 state,
                 options,
                 markers,
+                reserved,
                 focus,
                 active_row: None,
                 bounds: Rc::new(RefCell::new(HashMap::new())),
@@ -558,8 +561,12 @@ impl GutterLanes {
         let Some(entry) = self.entries.get_mut(&id) else {
             return false;
         };
+        entry.reserved |= !markers.is_empty();
+        let active_row = entry
+            .active_row
+            .filter(|row| markers.iter().any(|marker| marker.row() == *row));
         entry.markers = markers;
-        entry.active_row = None;
+        entry.active_row = active_row;
         entry.bounds.borrow_mut().clear();
         true
     }
@@ -568,8 +575,18 @@ impl GutterLanes {
         let Some(entry) = self.entries.get_mut(&id) else {
             return false;
         };
+        entry.reserved |= !markers.is_empty();
         entry.markers.extend(markers);
+        entry.bounds.borrow_mut().clear();
         true
+    }
+
+    pub(super) fn clear(&mut self) {
+        for entry in self.entries.values_mut() {
+            entry.markers.clear();
+            entry.active_row = None;
+            entry.bounds.borrow_mut().clear();
+        }
     }
 
     fn remove(&mut self, id: DecorationCollectionId) -> bool {
@@ -793,6 +810,12 @@ impl InlineWidgets {
             for widget in widgets.iter_mut() {
                 widget.offset = adjust_offset_for_edit(widget.offset, edited_range, inserted_len);
             }
+        }
+    }
+
+    pub(super) fn clear(&mut self) {
+        for widgets in self.entries.values_mut() {
+            widgets.clear();
         }
     }
 
