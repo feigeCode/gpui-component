@@ -694,7 +694,7 @@ impl InlineWidgetCollection {
     pub fn set(&self, widgets: Vec<InlineWidget>, cx: &mut App) {
         let _ = self.state.update(cx, |state, cx| {
             let widgets = normalize_widgets(&state.text, widgets);
-            if state.extras.inline_widgets.set(self.id, widgets) {
+            if state.extras.inline_widgets.set_if_changed(self.id, widgets) {
                 cx.notify();
             }
         });
@@ -710,7 +710,11 @@ impl InlineWidgetCollection {
     }
 
     pub fn clear(&self, cx: &mut App) {
-        self.set(Vec::new(), cx);
+        let _ = self.state.update(cx, |state, cx| {
+            if state.extras.inline_widgets.clear_if_nonempty(self.id) {
+                cx.notify();
+            }
+        });
     }
 
     pub fn dispose(&self, cx: &mut App) {
@@ -781,11 +785,25 @@ impl InlineWidgets {
         id
     }
 
-    fn set(&mut self, id: DecorationCollectionId, widgets: Vec<InlineWidget>) -> bool {
+    fn set_if_changed(&mut self, id: DecorationCollectionId, widgets: Vec<InlineWidget>) -> bool {
         let Some(entry) = self.entries.get_mut(&id) else {
             return false;
         };
+        if *entry == widgets {
+            return false;
+        }
         *entry = widgets;
+        true
+    }
+
+    fn clear_if_nonempty(&mut self, id: DecorationCollectionId) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        if entry.is_empty() {
+            return false;
+        }
+        entry.clear();
         true
     }
 
