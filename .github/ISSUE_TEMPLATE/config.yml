@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/longbridge/gpui-kit/discussions/categories/q-a
+    about: Ask questions and get help in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/longbridge/gpui-kit/security/advisories/new
+    about: Report security vulnerabilities privately.

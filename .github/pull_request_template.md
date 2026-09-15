@@ -1,4 +1,4 @@
-Closes #[issue number]
+Closes #
 
 ## Description
 
@@ -11,7 +11,7 @@ Please keep **1 PR to solve 1 problem**, and keep **Small improvements should be
 | ---------------------------- | --------------------------- |
 | [Put Before Screenshot here] | [Put After Screenshot here] |
 
-## Break Changes
+## Breaking Changes
 
 Describe any breaking changes introduced by this pull request. If none, remove this section.
 
