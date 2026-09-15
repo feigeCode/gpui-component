@@ -1432,11 +1432,20 @@ impl<M: InputModeKind> TextElement<M> {
             ) else {
                 continue;
             };
-            let wrapped_row = line
-                .wrapped_lines
-                .iter()
-                .position(|range| range.start <= local_offset && local_offset <= range.end)
-                .unwrap_or(0);
+            // `wrapped_lines` holds one shaped line per visual row, and the rows partition
+            // the buffer line in order, so the running total of their byte lengths is the
+            // byte range each row covers. That reproduces the inclusive `start <= offset <=
+            // end` test the ranges of `LineItem::wrapped_lines` would answer directly.
+            let wrapped_row = {
+                let mut row_end = 0usize;
+                line.wrapped_lines
+                    .iter()
+                    .position(|shaped| {
+                        row_end += shaped.len();
+                        local_offset <= row_end
+                    })
+                    .unwrap_or(0)
+            };
             let mut y = prepaint.last_layout.visible_top
                 + prepaint.last_layout.lines[..line_index]
                     .iter()
