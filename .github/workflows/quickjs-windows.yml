@@ -1,0 +1,40 @@
+name: QuickJS Windows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/shell/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/quickjs-windows.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build quickjs (i686-pc-windows-msvc)
+    runs-on: windows-latest
+    env:
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: i686-pc-windows-msvc
+      - name: Setup | Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: quickjs-i686-windows-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build the QuickJS bindings for 32-bit Windows
+        run: cargo build -p rquickjs --features macro,loader,jit-abi --target i686-pc-windows-msvc --locked --verbose
