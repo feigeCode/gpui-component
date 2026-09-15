@@ -384,9 +384,30 @@ gh pr create --base dev --head sync-gpui-kit \
 仓库布局：
 
 ```
-feigeCode/zed                       # 长期维护 dynamic-texture 分支（已就绪）
+feigeCode/zed                       # 维护分支 gpui-pre-release（发版的唯一源头）
 feigeCode/gpui-pre                  # 把 zed 转成 gpui-pre 命名空间后的产物
 ```
+
+**`gpui-pre-release` 的定位（2026-09-15 起）**：
+
+它 = `upstream/main` + 那些**还没进上游**的本地改动，是 stage 快照时唯一该用的源。当前带两处：
+
+- `dynamic-texture` 那条线（GPU 纹理上传生命周期；对应上游 PR #64061）
+- macOS 关窗时 accesskit 适配器的引用环修复（对应上游 PR #64143）
+
+`dynamic-texture` / `gpui-macos-accesskit-retain-cycle` 仍然各自独立存在——它们是**给上游开 PR 用的干净分支**，一修复一分支，不要往上面叠别的东西。维护分支只负责聚合，不是 PR 的 head。
+
+**同步 zed main（每次发版前做）**：
+
+```bash
+cd /path/to/zed
+git fetch upstream --prune                     # zed 仓很大，这一步可能要几分钟
+git checkout gpui-pre-release
+git merge upstream/main                        # 冲突通常只在 use 列表这类地方
+git push origin gpui-pre-release
+```
+
+如果上游把某个本地改动合了（比如 PR #64061 落地），就把对应分支删掉、维护分支变成纯 main，再 stage。
 
 **与 path patch 的对比**：
 
@@ -417,18 +438,31 @@ cargo check --workspace --locked
 cargo test -p remote_desktop_view --lib  # 仍应 241 passed
 ```
 
-**之后每次 zed dynamic-texture 分支变化**：
+**之后每次发新 gpui-pre**（先把上游同步进 `gpui-pre-release`，见上一节）：
 
 ```bash
-cd /path/to/zed && git pull                  # 或 merge main / cherry-pick
-cd /path/to/navop
-script/patch-local-gpui-pre.py --no-stage    # 刷 staging（仅本地）
-script/publish-gpui-pre-fork.py \
-    --fork-url "git@github.com:feigeCode/gpui-pre.git" \
-    --tag "fork-0.3.100"                     # bump tag
-script/migrate-to-git-fork.py --tag "fork-0.3.100"
-cargo test -p remote_desktop_view --lib
-git add -A && git commit -m "bump: gpui-pre to fork-0.3.100"
+# 1) 从维护分支 stage 出 25 个 gpui-pre-* 快照
+cd <gpui-component>
+PATH="$HOME/.cargo/bin:$PATH" bun script/bump-gpui.ts 0.3.99 \
+    --zed /path/to/zed --stage-only          # 产物在 target/gpui-pre/workspace
+# 注意：脚本要 cargo 在 PATH 里（bun 起的子进程不继承你的 shell 配置）
+
+# 2) 同步到发布镜像并核对 delta
+rsync -a --exclude .git --exclude target target/gpui-pre/workspace/ ../.gpui-pre/publish/
+git -C ../.gpui-pre/publish status --short   # 应只有 zed-rev/描述行 + 真实源码改动
+# 检查有没有 `=x.y.z` 精确钉残留（见下方「踩过的坑」）
+
+# 3) 提交 + 打 tag + 推（手动，不用 publish-gpui-pre-fork.py，见下）
+cd ../.gpui-pre/publish
+git add -A && git commit && git tag fork-0.3.10N
+git push origin HEAD:main && git push origin refs/tags/fork-0.3.10N
+
+# 4) navop 换版本号（Cargo.toml 里 tag 25 行 + gpui-component rev 8 行）
+#    然后 seed cargo 的 git 缓存再重解析（按 SHA fetch 会在 sandbox 下挂住）
+git -C ~/.cargo/git/db/gpui-pre-<hash> fetch https://github.com/feigeCode/gpui-pre.git \
+    "+refs/tags/fork-0.3.10N:refs/commit/<snapshot-commit>"
+cargo metadata --format-version 1            # 刷 Cargo.lock
+cargo check -p main --locked                 # 真正的验收：能编过才算发完
 ```
 
 **切回官方**（上游 gpui-pre 含 DynamicTexture 后）：
@@ -444,7 +478,7 @@ git diff --stat
 
 **两个脚本的语义**：
 
-- `script/publish-gpui-pre-fork.py`：把 stage 出的 workspace 复制到 `<gpui-component>/../.gpui-pre/publish/`，在那里 `git init` + `commit` + `tag` + `push`。参数化 fork URL、tag、branch，支持 `--dry-run` / `--init-only` / `--no-stage`。
+- `script/publish-gpui-pre-fork.py`：把 stage 出的 workspace 复制到 `<gpui-component>/../.gpui-pre/publish/`，在那里 `git init` + `commit` + `tag` + `push`。参数化 fork URL、tag、branch，支持 `--dry-run` / `--init-only` / `--no-stage`。**本机跑不完**：它会先 `rmtree(.gpui-pre/publish/*)`，被批量删除保护拦下——已改用上面「rsync 覆盖 + 手动 commit/tag/push」，等价且安全。
 - `script/migrate-to-git-fork.py`：只编辑 `[patch.crates-io]` 块（`path` ↔ `git + tag`）。不调 cargo，cargo update 留给用户控制时机；默认会跑 `cargo update -p gpui-pre-...` 让 lock 跟上来。
 
 **为什么不能直接给 feigeCode/zed 打 patch**：zed 的 crate 名是 `gpui`/`util`/...、版本 0.2.2，navop 依赖 `gpui-pre`/`gpui-pre-util`/...、版本 `^0.3.1`。`[patch.crates-io]` 只能改**来源**（path / git / crates.io），不能改**包名/版本**——所以必须先经 `bump-gpui.ts` 做改名+定版本，产物**单独**建仓库。
@@ -454,6 +488,13 @@ git diff --stat
 - `feigeCode/gpui-pre`（2026-09-10 已转 public）已创建，`main` 分支 + tag `fork-0.3.99`，含 25 个 `gpui-pre-*` crate（快照来自 zed `dynamic-texture` @ `52b2927a1b` + `cae01216cb`）。
 - navop 的 `[patch.crates-io]` 已切换为 git 来源：`gpui-pre-* = { git = "https://github.com/feigeCode/gpui-pre.git", tag = "fork-0.3.99" }`，24 个包进图（`gpui-pre-reqwest-client` 不在图中被 cargo 忽略）。仓库转 public 后 HTTPS 匿名可拉，SSH key 不再是 build host 的前提。
 - 验证：`cargo check --workspace --locked` EXIT=0；`cargo test -p remote_desktop_view --lib --locked` 241 passed。
+
+**后续发布记录**：
+
+- `fork-0.3.104` — 快照源 `zed@4945774`（dynamic-texture @ `7ea59c3094` + accesskit 修复，一个游离提交）。
+- `fork-0.3.105` — 同源重新 stage，但换成合并了新 staging 流水线的版本：把 zed 对外部 crate 的精确钉 `=x.y.z` 放宽成 `^x.y.z`。**钉死的库会让依赖图上已有更新 patch 的消费者静默退回上一版快照**（只报 `patch ... was not used`），所以这一版必须发。
+- `fork-0.3.106` — 首个来自 `gpui-pre-release` 的快照：`zed@29281f0` = upstream/main `ba7da93e5c` + dynamic-texture + accesskit 修复，顺带带上 zed main 自 `7960b2a7c9` 以来的 37+ 个提交。
+
 
 **踩过的坑（重要）**：
 
