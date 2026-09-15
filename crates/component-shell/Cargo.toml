@@ -16,6 +16,7 @@ gpui-component = { workspace = true, features = ["tree-sitter-rust"] }
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 serde_json.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

@@ -240,6 +240,100 @@ mod retained_component_state_tests {
                 .contains("cannot be updated during render")
         );
     }
+
+    /// A handle minted by `gpui-base` (`InputState.new(...)` in a script) must
+    /// be readable through the component-state lookup: JS validation accepts
+    /// it (`entities.kind` answers for base handles), so materialization has
+    /// to find the very same state or every `new Input(baseState)` frame
+    /// fails with "retained state handle has been released".
+    #[gpui::test]
+    fn base_entity_state_satisfies_component_state_lookups(cx: &mut TestAppContext) {
+        let runtime = ShellRuntime::new_isolated().unwrap();
+        let window = cx.add_window(|_, _| gpui::Empty);
+        let mut context = VisualTestContext::from_window(*window, cx);
+
+        let (input_handle, input_entity, textarea_handle, textarea_entity) = context
+            .update(|window, cx| {
+                let mut entities = runtime.entities();
+                let input_handle = entities
+                    .create_input(
+                        Some("probe".into()),
+                        Some("topic".into()),
+                        None,
+                        window,
+                        cx,
+                    )
+                    .unwrap();
+                let input_entity = entities.input(input_handle).unwrap();
+                let textarea_handle = entities
+                    .create_textarea(Some("probe".into()), None, None, None, window, cx)
+                    .unwrap();
+                let textarea_entity = entities.textarea(textarea_handle).unwrap();
+                (input_handle, input_entity, textarea_handle, textarea_entity)
+            });
+
+        let bridged_input = context
+            .update(|_, _| {
+                runtime.with_component_state::<Entity<gpui_base::input::InputState>, _>(
+                    input_handle,
+                    "InputState",
+                    Clone::clone,
+                )
+            })
+            .expect("a base InputState handle must satisfy a component-state lookup");
+        assert_eq!(bridged_input.entity_id(), input_entity.entity_id());
+
+        let bridged_textarea = context
+            .update(|_, _| {
+                runtime.with_component_state::<Entity<gpui_base::input::TextareaState>, _>(
+                    textarea_handle,
+                    "TextareaState",
+                    Clone::clone,
+                )
+            })
+            .expect("a base TextareaState handle must satisfy a component-state lookup");
+        assert_eq!(bridged_textarea.entity_id(), textarea_entity.entity_id());
+
+        // The bridge is kind-checked: a base handle must not answer for a
+        // different kind, and an unknown handle keeps the component-store
+        // diagnostics verbatim.
+        let wrong_kind = context
+            .update(|_, _| {
+                runtime.with_component_state::<usize, _>(input_handle, "State", |_| ())
+            })
+            .unwrap_err();
+        assert!(
+            wrong_kind
+                .to_string()
+                .contains("retained state handle has been released"),
+            "a base handle must not answer for another kind: {wrong_kind:#}"
+        );
+        let unknown = context
+            .update(|_, _| {
+                runtime.with_component_state::<usize, _>(u64::MAX - 1, "State", |_| ())
+            })
+            .unwrap_err();
+        assert!(unknown.to_string().contains("has been released"));
+
+        // Component-store behavior is untouched: kind mismatches on entries
+        // that do exist still report the mismatch, not the bridge.
+        let component_handle = runtime
+            .component_states
+            .borrow_mut()
+            .insert("State", None, Box::new(7usize))
+            .unwrap();
+        let mismatch = context
+            .update(|_, _| {
+                runtime.with_component_state::<usize, _>(component_handle, "InputState", |_| ())
+            })
+            .unwrap_err();
+        assert!(
+            mismatch
+                .to_string()
+                .contains("retained state kind mismatch"),
+            "an existing component entry must keep its kind check: {mismatch:#}"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1679,13 +1773,69 @@ impl ShellRuntime {
         body: impl FnOnce(&T) -> R,
     ) -> anyhow::Result<R> {
         self.flush_component_state_releases();
-        let result = self
-            .component_states
-            .try_borrow()
-            .map_err(|_| anyhow!("retained component state is already mutably borrowed"))?
-            .with(handle, kind, body);
+        let result = {
+            let component_states = self
+                .component_states
+                .try_borrow()
+                .map_err(|_| anyhow!("retained component state is already mutably borrowed"))?;
+            if component_states.kind(handle).is_some() {
+                component_states.with(handle, kind, body)
+            } else if self.base_entity_kind(handle) == Some(kind) {
+                self.with_base_entity_state(handle, kind, body)
+            } else {
+                // Neither store knows this handle (or the component-store
+                // entry's owner was released) — reproduce the component-store
+                // diagnostics verbatim.
+                component_states.with(handle, kind, body)
+            }
+        };
         self.flush_component_state_releases();
         result
+    }
+
+    /// Reads retained state that lives in the base entity store rather than in
+    /// the component state store.
+    ///
+    /// `gpui-base` mints handles for `InputState`/`TextareaState`/… via its
+    /// `InputState.new(...)` factories, and component validation accepts those
+    /// handles (`entities.kind` answers for them). Component adapters hold the
+    /// very same Rust types — `Entity<InputState>` and friends — so a base
+    /// handle can satisfy a component's retained-state argument: the two
+    /// projections differ in their script API, not in the state behind it.
+    fn with_base_entity_state<T: std::any::Any, R>(
+        &self,
+        handle: u64,
+        kind: &'static str,
+        body: impl FnOnce(&T) -> R,
+    ) -> anyhow::Result<R> {
+        let boxed: Box<dyn std::any::Any> = {
+            let entities = self.entities.borrow();
+            let entity: Option<Box<dyn std::any::Any>> = match kind {
+                "InputState" => entities
+                    .input(handle)
+                    .map(|state| Box::new(state) as Box<dyn std::any::Any>),
+                "TextareaState" => entities
+                    .textarea(handle)
+                    .map(|state| Box::new(state) as Box<dyn std::any::Any>),
+                "SliderState" => entities
+                    .slider(handle)
+                    .map(|state| Box::new(state) as Box<dyn std::any::Any>),
+                "CalendarState" => entities
+                    .calendar(handle)
+                    .map(|state| Box::new(state) as Box<dyn std::any::Any>),
+                _ => None,
+            };
+            entity
+        }
+        .ok_or_else(|| anyhow!("base entity store has no live `{kind}` for this handle"))?;
+        let value = boxed.downcast_ref::<T>().ok_or_else(|| {
+            anyhow!("adapter state type does not match base state kind `{kind}`")
+        })?;
+        Ok(body(value))
+    }
+
+    fn base_entity_kind(&self, handle: u64) -> Option<&'static str> {
+        self.entities.borrow().kind(handle)
     }
 
     pub(crate) fn update_component_state<T: std::any::Any, R>(

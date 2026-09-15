@@ -3766,6 +3766,7 @@ dependencies = [
  "gpui-pre",
  "gpui-shell",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
