@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: longbridge/gpui-kit-showcases
-          ref: main
+          ref: e52b018f9544a55954bb58bebe353088b81ff30c
           path: .showcases
           persist-credentials: false
 

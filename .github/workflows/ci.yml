@@ -7,6 +7,9 @@ on:
     tags:
       - "*"
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.ref_name == 'main' && github.sha || 'anysha' }}
   cancel-in-progress: true
@@ -30,6 +33,16 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
+      - name: Setup | Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: test-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Install system dependencies
         if: ${{ matrix.run_on != 'windows-latest' }}
         run: script/bootstrap
@@ -41,16 +54,6 @@ jobs:
       - name: Machete
         if: ${{ matrix.run_on == 'macos-latest' }}
         uses: bnjbvr/cargo-machete@v0.9.1
-      - name: Setup | Cache Cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: test-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Typo check
         if: ${{ matrix.run_on == 'macos-latest' }}
         run: |
@@ -60,10 +63,10 @@ jobs:
         if: ${{ matrix.run_on == 'macos-latest' }}
         run: |
           for pair in "coding-guides skills/gpui-kit" "design-guides skills/gpui-kit-design-guides"; do
-            set -- $pair
-            if ! diff -u "website/docs/$1.md" "$2/references/$1.md"; then
-              echo "::error::$2/references/$1.md is stale."
-              echo "Run: cp website/docs/$1.md $2/references/$1.md"
+            read -r guide skill_dir <<< "$pair"
+            if ! diff -u "website/docs/$guide.md" "$skill_dir/references/$guide.md"; then
+              echo "::error::$skill_dir/references/$guide.md is stale."
+              echo "Run: cp website/docs/$guide.md $skill_dir/references/$guide.md"
               exit 1
             fi
           done

@@ -20,6 +20,9 @@ on:
         required: false
         default: false
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -55,8 +58,18 @@ jobs:
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          ZED_REV: ${{ inputs.rev || 'main' }}
+          FORCE_RELEASE: ${{ inputs.force }}
         run: |
-          bun script/bump-gpui.ts ${{ inputs.version }} --rev "${{ inputs.rev || 'main' }}" ${{ inputs.force && '--force' || '' }}
+          args=(--rev "$ZED_REV")
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            args+=("$RELEASE_VERSION")
+          fi
+          if [[ "$FORCE_RELEASE" == "true" ]]; then
+            args+=(--force)
+          fi
+          bun script/bump-gpui.ts "${args[@]}"
       - name: Summary
         if: always()
         run: |
