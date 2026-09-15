@@ -2,6 +2,12 @@ name: QuickJS Windows
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "crates/shell/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/quickjs-windows.yml"
   pull_request:
     paths:
       - "crates/shell/**"
