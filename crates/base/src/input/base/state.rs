@@ -847,6 +847,16 @@ impl<M: InputModeKind> InputBaseState<M> {
         self.projected_editor_style = style;
     }
 
+    /// The style this editor is currently painting with.
+    ///
+    /// After a render this is the projected style with every unset colour
+    /// filled in, so a host — or a test — can check what actually reached the
+    /// state rather than what it asked for.
+    #[doc(hidden)]
+    pub fn editor_style(&self) -> &InputEditorStyle {
+        &self.editor_style
+    }
+
     /// Set presentation padding for multi-line text and its scrollbar layout.
     #[doc(hidden)]
     pub fn set_editor_paddings(&mut self, paddings: Edges<Pixels>) {

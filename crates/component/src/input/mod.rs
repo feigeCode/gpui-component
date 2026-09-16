@@ -38,7 +38,7 @@ pub use gpui_base::input::{EditorMode, InputMode, InputModeKind, TextareaMode};
 mod editor;
 mod state;
 mod textarea;
-pub use editor::Editor;
+pub use editor::{Editor, EditorStyleOverrides};
 pub use gpui_base::input::{
     AutoClosingPair, BracketPair, IndentationRules, LanguageProvider, SyntaxContext,
     SyntaxContextProvider, set_language_config, set_language_provider,

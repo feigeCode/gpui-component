@@ -18,6 +18,7 @@ use crate::{Sizable, StyleSized};
 use gpui_base::InputBase as BaseInput;
 use rust_i18n::t;
 
+use super::editor::EditorStyleOverrides;
 use super::state::{TextInputState, sync_focused_input_registry};
 use super::{InputContentType, InputState, sync_native_content_type};
 use crate::ThemeStyled as _;
@@ -132,6 +133,10 @@ pub struct Input {
     ///
     /// If set, this overrides the built-in context menu.
     context_menu_builder: Option<Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu>>,
+
+    /// An optional palette that wins over the theme-derived one. Set through
+    /// [`super::Editor::editor_style`], which is the only public entry point.
+    editor_style: Option<EditorStyleOverrides>,
 }
 
 impl Sizable for Input {
@@ -206,7 +211,19 @@ impl Input {
             accessibility_id: None,
             aria_label: None,
             context_menu_builder: None,
+            editor_style: None,
         }
+    }
+
+    /// Paint this input with a palette of the caller's choosing.
+    ///
+    /// Only the fields that are set win over the theme-derived values.
+    /// Meaningful for a code editor, whose surface is large enough that a
+    /// palette differing from the application theme's is worth having; it is
+    /// reachable through [`super::Editor::editor_style`].
+    pub(crate) fn editor_style(mut self, style: EditorStyleOverrides) -> Self {
+        self.editor_style = Some(style);
+        self
     }
 
     /// Set the developer-assigned identifier exposed to accessibility clients.
@@ -416,6 +433,14 @@ impl RenderOnce for Input {
             },
             cx,
         );
+        // A host palette is projected over the theme's rather than instead of
+        // it, so an editor can follow a palette other than the application
+        // theme's without the host having to reimplement the parts the
+        // component owns: fold icons and diagnostic colours keep coming from
+        // the theme.
+        if let Some(overrides) = self.editor_style.as_ref() {
+            state.apply_editor_style(overrides, cx);
+        }
         state.set_editor_paddings(
             if state.presentation(cx).is_multi_line() {
                 Edges {
